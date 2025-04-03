@@ -35,6 +35,9 @@ class ElementaryVar(Var):
         return self
     
     def backward(self, value: Optional[NUM] = None):
+        if value is None:
+            value = 1
+
         if self.grad is None:
             self.grad = value
         else:

@@ -1,6 +1,6 @@
 [project]
-name = "tinyAutoDiff"
-version = "1.2.0"
+name = "tinyad"
+version = "1.0.0"
 
 authors = [
   { name="Ayhem Bouabid", email="ayhembouabid@yandex.com" },
@@ -38,4 +38,4 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tinyAutoDiff"]
+packages = ["src/tinyad"]
