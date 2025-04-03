@@ -48,6 +48,7 @@ class Sub(Var):
     def forward(self) -> "Var":
         return Sub(self.left.forward(), self.right.forward())
     
+
     def backward(self, value: Optional[NUM] = None):
         if value is None:
             value = 1
@@ -59,6 +60,7 @@ class Sub(Var):
         # propagate the gradient to the children
         self.left.backward(value)
         self.right.backward(-value)  # Negative gradient for the right operand
+
 
     def compute(self) -> NUM:
         if self.value is not None:
@@ -99,11 +101,20 @@ class Mult(Var):
 
 
 class Div(Var):
-    def __init__(self, left: Var, right: Var):
+    def __init__(self, left: Var, right: Var, numerical_issue_tolerance: float = 1e-8):
         super().__init__("/")
         self.left = left
         self.right = right
         self.children = [left, right]
+
+        right_val = self.right.compute()
+
+        if right_val == 0:
+            raise ValueError("Division by zero")
+
+        if abs(right_val) < numerical_issue_tolerance:
+            raise ValueError("Division by a number too close to zero")
+
 
     def forward(self) -> "Var":
         return Div(self.left.forward(), self.right.forward())
