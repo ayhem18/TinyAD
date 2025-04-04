@@ -96,6 +96,7 @@ class Mult(BinaryOp):
     def forward(self) -> "Var":
         return Mult(self.left.forward(), self.right.forward())
     
+    
     def backward(self, value: Optional[NUM] = None):
         if value is None:
             value = 1
