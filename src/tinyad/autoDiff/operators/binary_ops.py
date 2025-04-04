@@ -1,15 +1,35 @@
+from abc import abstractmethod
 from typing import Optional
 
 from ..common import NUM
 from ..var import Var
 
 
-class Add(Var):
-    def __init__(self, left: Var, right: Var):
-        super().__init__("+")
+class BinaryOp(Var):
+    def __init__(self, name: str, left: Var, right: Var):
+        super().__init__(name)
         self.left = left
         self.right = right
         self.children = [left, right]
+
+    @abstractmethod
+    def forward(self) -> "Var":
+        pass
+
+    @abstractmethod
+    def backward(self, value: Optional[NUM] = None):
+        pass
+
+    @abstractmethod
+    def compute(self) -> NUM:
+        pass
+
+
+
+class Add(BinaryOp):
+    def __init__(self, left: Var, right: Var):
+        super().__init__("+", left, right)
+
 
     def forward(self) -> "Var":
         return Add(self.left.forward(), self.right.forward())
@@ -38,12 +58,10 @@ class Add(Var):
         return self.value
     
 
-class Sub(Var):
+class Sub(BinaryOp):
     def __init__(self, left: Var, right: Var):
-        super().__init__("-")
-        self.left = left
-        self.right = right
-        self.children = [left, right]
+        super().__init__("-", left, right)
+
 
     def forward(self) -> "Var":
         return Sub(self.left.forward(), self.right.forward())
@@ -70,12 +88,10 @@ class Sub(Var):
         return self.value
 
 
-class Mult(Var):
+class Mult(BinaryOp):
     def __init__(self, left: Var, right: Var):
-        super().__init__("*")
-        self.left = left
-        self.right = right
-        self.children = [left, right]
+        super().__init__("*", left, right)
+
 
     def forward(self) -> "Var":
         return Mult(self.left.forward(), self.right.forward())
@@ -100,12 +116,10 @@ class Mult(Var):
         return self.value
 
 
-class Div(Var):
+class Div(BinaryOp):
     def __init__(self, left: Var, right: Var, numerical_issue_tolerance: float = 1e-8):
-        super().__init__("/")
-        self.left = left
-        self.right = right
-        self.children = [left, right]
+        super().__init__("/", left, right)
+        self.numerical_issue_tolerance = numerical_issue_tolerance
 
         right_val = self.right.compute()
 
@@ -119,6 +133,7 @@ class Div(Var):
     def forward(self) -> "Var":
         return Div(self.left.forward(), self.right.forward())
     
+
     def backward(self, value: Optional[NUM] = None):
         if value is None:
             value = 1
@@ -132,6 +147,7 @@ class Div(Var):
         # propagate the gradient to the children
         self.left.backward(value / right_val)
         self.right.backward(-value * self.left.compute() / (right_val ** 2))
+
 
     def compute(self) -> NUM:
         if self.value is not None:
