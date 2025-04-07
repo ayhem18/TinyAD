@@ -8,10 +8,10 @@ import numpy as np
 
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div, Exp
 from tinyad.autoDiff.var import ElementaryVar, ConstantVar
-from tinyad.tests.operators.combined_ops_tests.base_test import BaseTest
+from tinyad.tests.operators.combined_ops_tests.binary_operators.bin_ops_base_test import BinaryOperatorsBaseTest
 
 
-class TestPolynomialExpressesionsExponentiation(BaseTest):
+class TestPolynomialExpressesionsExponentiation(BinaryOperatorsBaseTest):
     """Test class for polynomial expressions with exponentiation."""
     
     def test_poly_with_exp(self):
@@ -183,7 +183,7 @@ class TestPolynomialExpressesionsExponentiation(BaseTest):
 
 
 
-class TestRationalExpressionsExponentiation(BaseTest):
+class TestRationalExpressionsExponentiation(BinaryOperatorsBaseTest):
     """Test class for rational expressions with exponentiation."""
     
     def test_rational_expression_with_exp(self):

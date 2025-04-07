@@ -6,12 +6,12 @@ import numpy as np
 import random
 import unittest
 
-from tinyad.tests.operators.combined_ops_tests.base_test import BaseTest
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div
 from tinyad.autoDiff.var import ElementaryVar, ConstantVar
+from tinyad.tests.operators.combined_ops_tests.binary_operators.bin_ops_base_test import BinaryOperatorsBaseTest
 
 
-class TestPolynomialExpressions(BaseTest):
+class TestPolynomialExpressions(BinaryOperatorsBaseTest):
     """Test class for combined operations of Add, Mult, Sub, and Div."""    
     
     def test_poly_add_mult(self):
@@ -236,7 +236,7 @@ class TestPolynomialExpressions(BaseTest):
             super()._verify_gradients(variables, expected_gradients, counts)
 
 
-class TestRationalExpressions(BaseTest):
+class TestRationalExpressions(BinaryOperatorsBaseTest):
     """Test class for rational expressions combining all operations."""
     
     def test_rational_expression(self):

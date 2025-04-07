@@ -5,11 +5,11 @@ import numpy as np
 
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div, Exp
 from tinyad.autoDiff.var import ElementaryVar, ConstantVar
-from tinyad.tests.operators.combined_ops_tests.base_test import BaseTest
+from tinyad.tests.operators.combined_ops_tests.binary_operators.bin_ops_base_test import BinaryOperatorsBaseTest
 
 
-class TestBasicCombinations(BaseTest):
-    """Test class for combined operations of Add, Mult, Sub."""
+class TestBasicCombinations(BinaryOperatorsBaseTest):
+    """Test class for combined operations of Add, Mult, Sub, Div, Exp."""
 
     def test_mult_as_add(self):
         """Test the multiplication of two variables as an addition of two variables."""
