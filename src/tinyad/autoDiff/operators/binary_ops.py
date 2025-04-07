@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import Optional
 
 from ..common import NUM
-from ..var import Var
+from ..var import ConstantVar, Var
 
 
 class BinaryOp(Var):
@@ -32,7 +32,7 @@ class Add(BinaryOp):
 
 
     def forward(self) -> "Var":
-        return Add(self.left.forward(), self.right.forward())
+        return Add(self.left, self.right)
     
     def backward(self, value: Optional[NUM] = None):
         if value is None:
@@ -64,7 +64,7 @@ class Sub(BinaryOp):
 
 
     def forward(self) -> "Var":
-        return Sub(self.left.forward(), self.right.forward())
+        return Sub(self.left, self.right)
     
 
     def backward(self, value: Optional[NUM] = None):
@@ -94,7 +94,7 @@ class Mult(BinaryOp):
 
 
     def forward(self) -> "Var":
-        return Mult(self.left.forward(), self.right.forward())
+        return Mult(self.left, self.right)
     
     
     def backward(self, value: Optional[NUM] = None):
@@ -132,7 +132,7 @@ class Div(BinaryOp):
 
 
     def forward(self) -> "Var":
-        return Div(self.left.forward(), self.right.forward())
+        return Div(self.left, self.right)
     
 
     def backward(self, value: Optional[NUM] = None):
@@ -155,6 +155,63 @@ class Div(BinaryOp):
             return self.value
         
         self.value = self.left.compute() / self.right.compute()
+        return self.value
+
+
+class Exp(BinaryOp):
+    def __init__(self, base: Var, exponent: Var):
+        super().__init__("^", base, exponent)
+        
+        # Verify that the exponent is a ConstantVar
+        if not isinstance(exponent, ConstantVar):
+            raise TypeError("Exponent must be a ConstantVar")
+        
+        # Store the exponent value for easier access
+        self.exponent_value = exponent.compute()
+
+        if self.exponent_value == 0:
+            raise ValueError("The the exponent must be set to a value different from 0")
+
+
+    def forward(self) -> "Var":
+        return Exp(self.left, self.right)
+    
+    def backward(self, value: Optional[NUM] = None):
+        if value is None:
+            value = 1
+        
+        # For y = x^n:
+        # dy/dx = n * x^(n-1)
+        self.grad = value
+        
+        base_value = self.left.compute()
+        exponent = self.exponent_value
+        
+        # Calculate gradient for the base
+        # Guard against potential numerical issues
+        if base_value == 0 and exponent < 1:
+            gradient = 0  # Handle 0^n cases carefully
+        else:
+            gradient = exponent * (base_value ** (exponent - 1))
+        
+        # Propagate gradient to the base (left operand)
+        self.left.backward(value * gradient)
+        
+        # No gradient propagation to the exponent (constant)
+        self.right.backward(0)
+
+    def compute(self) -> NUM:
+        if self.value is not None:
+            return self.value
+        
+        base = self.left.compute()
+        exponent = self.exponent_value
+        
+        # # Handle special cases or potential errors
+        # if base < 0 and not (exponent).is_integer():
+        #     raise ValueError("Cannot raise negative number to fractional power")
+        
+        self.value = base ** exponent
         return self.value
 
 

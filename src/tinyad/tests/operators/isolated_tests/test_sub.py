@@ -195,8 +195,11 @@ class TestSubBackwardBasic(unittest.TestCase):
             
             # 6. Check that each variable's gradient matches its count but to the negative sign
             for i in range(n):
-                self.assertEqual(variables[i].grad, -counts[i],
-                                f"Variable {i} gradient {variables[i].grad} does not match expected {-counts[i]}")
+                if counts[i] == 0:
+                    self.assertIsNone(variables[i].grad)
+                else:
+                    self.assertEqual(variables[i].grad, -counts[i],
+                                    f"Variable {i} gradient {variables[i].grad} does not match expected {-counts[i]}")
 
 
     def test_different_upstream_gradients(self):
