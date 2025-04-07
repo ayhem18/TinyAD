@@ -267,9 +267,11 @@ class TestAddBackwardBasic(unittest.TestCase):
             
             # 6. Check that each variable's gradient matches its usage count
             for i in range(n):
-                self.assertEqual(variables[i].grad, counts[i], 
-                                f"Variable {i} gradient {variables[i].grad} does not match count {counts[i]}")
-
+                if counts[i] > 0:   
+                    self.assertEqual(variables[i].grad, counts[i], 
+                                    f"Variable {i} gradient {variables[i].grad} does not match count {counts[i]}")
+                else:
+                    self.assertIsNone(variables[i].grad)
 
 
 

@@ -211,6 +211,9 @@ class Exp(BinaryOp):
         # if base < 0 and not (exponent).is_integer():
         #     raise ValueError("Cannot raise negative number to fractional power")
         
+        if base == 0:
+            return 0
+
         self.value = base ** exponent
         return self.value
 

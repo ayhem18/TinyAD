@@ -40,8 +40,12 @@ class TestExpForwardBasic(unittest.TestCase):
         """Test the compute method with various random values."""
         # Test with 20 random pairs of values
         for _ in range(20):
-            x_val = random.uniform(0.1, 10)  # Positive values to avoid complex results
-            n_val = random.uniform(0.5, 5)   # Reasonable exponent range
+            x_val = random.uniform(-10, 10)  # Positive values to avoid complex results
+
+            n_val = 0
+            while abs(n_val) < 1e-6:
+                # keep generating a new exponent until it's not too close to 0
+                n_val = random.uniform(-10, 5)   
             
             x = ElementaryVar("x", x_val)
             n = ConstantVar("n", n_val)
@@ -80,22 +84,13 @@ class TestExpForwardBasic(unittest.TestCase):
         self.assertIs(called.left, x)
         self.assertIs(called.right, n)
     
-    def test_special_exponents(self):
-        """Test exponentiation with special exponents like 0, 1, 2."""
-        x_val = 3.0
-        x = ElementaryVar("x", x_val)
-        
-        # x^0 = 1
-        exp0 = Exp(x, ConstantVar("n", 0))
-        self.assertEqual(exp0.compute(), 1.0)
-        
-        # x^1 = x
-        exp1 = Exp(x, ConstantVar("n", 1))
-        self.assertEqual(exp1.compute(), x_val)
-        
-        # x^2 = x*x
-        exp2 = Exp(x, ConstantVar("n", 2))
-        self.assertEqual(exp2.compute(), x_val * x_val)
+    def test_fail_with_zero_exponent(self):
+        """Test that the exponent must be different from 0."""
+        for _ in range(1000):
+            x = ElementaryVar("x", random.uniform(0.1, 10))
+            n = ConstantVar("n", 0)
+            with self.assertRaises(ValueError):
+                Exp(x, n)
 
 
 class TestExpBackwardBasic(unittest.TestCase):
@@ -104,7 +99,7 @@ class TestExpBackwardBasic(unittest.TestCase):
     def test_simple_gradient(self):
         """Test gradient computation with integer exponents."""
         for base in range(1, 6):
-            for power in range(0, 5):
+            for power in range(1, 5):
                 x = ElementaryVar("x", float(base))
                 n = ConstantVar("n", float(power))
                 exp = Exp(x, n)
@@ -115,19 +110,19 @@ class TestExpBackwardBasic(unittest.TestCase):
                 
                 # For y = x^n:
                 # dy/dx = n * x^(n-1)
-                if power == 0:
-                    expected_grad = 0  # Derivative of x^0 is 0
-                else:
-                    expected_grad = power * (base ** (power - 1))
+                expected_grad = power * (base ** (power - 1))
                 
                 self.assertAlmostEqual(x.grad, expected_grad)
                 self.assertEqual(n.grad, 0)  # Constant always has zero gradient
     
     def test_different_upstream_gradients(self):
         """Test backpropagation with different upstream gradients."""
-        for _ in range(10):
-            x_val = random.uniform(0.5, 5)
-            n_val = random.uniform(1, 3)
+        for _ in range(100):
+            x_val = random.uniform(-5, 5)
+            n_val = 0
+            while abs(n_val) < 1e-6:
+                # keep generating a new exponent until it's not too close to 0
+                n_val = random.uniform(-10, 5)   
             
             x = ElementaryVar("x", x_val)
             n = ConstantVar("n", n_val)
@@ -155,8 +150,8 @@ class TestExpBackwardBasic(unittest.TestCase):
     
     def test_fractional_exponents(self):
         """Test gradient computation with fractional exponents."""
-        for _ in range(10):
-            x_val = random.uniform(0.5, 5)  # Positive values
+        for _ in range(1000):
+            x_val = random.uniform(-10, 10)  # Positive values
             n_val = random.uniform(0.1, 2)  # Fractional exponents
             
             x = ElementaryVar("x", x_val)
@@ -172,7 +167,7 @@ class TestExpBackwardBasic(unittest.TestCase):
     
     def test_complex_expression_tree(self):
         """Test gradients in a more complex expression tree with exponentiation."""
-        for _ in range(10):
+        for _ in range(1000):
             x_val = random.uniform(0.5, 3)
             
             x = ElementaryVar("x", x_val)
@@ -195,24 +190,21 @@ class TestExpBackwardBasic(unittest.TestCase):
     
     def test_zero_base(self):
         """Test exponentiation with base 0."""
-        x = ElementaryVar("x", 0.0)
-        
-        # 0^2 = 0
-        exp = Exp(x, ConstantVar("n", 2))
-        self.assertEqual(exp.compute(), 0.0)
-        
-        # Gradient should be 0, to prevent division by zero
-        exp.backward()
-        self.assertEqual(x.grad, 0.0)
-        
-        # 0^0 is undefined or 1 by convention, we'll use 1
-        exp0 = Exp(x, ConstantVar("n", 0))
-        self.assertEqual(exp0.compute(), 1.0)
-        
-        # Gradient should be 0
-        exp0.backward()
-        self.assertEqual(x.grad, 0.0)
-
+        for _ in range(1000):
+            x = ElementaryVar("x", 0.0)
+            n_val = 0
+            while abs(n_val) < 1e-6:
+                # keep generating a new exponent until it's not too close to 0
+                n_val = random.uniform(-100, 100)   
+            
+            # 0^anything = 0
+            exp = Exp(x, ConstantVar("n", n_val))
+            self.assertEqual(exp.compute(), 0.0)
+            
+            # Gradient should be 0, to prevent division by zero
+            exp.backward()
+            self.assertEqual(x.grad, 0.0)
+            
 
 if __name__ == '__main__':
     random.seed(42)

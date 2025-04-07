@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import unittest
 
 from tinyad.autoDiff.common import NUM
-from tinyad.autoDiff.operators.binary_ops import Add, Mult
+from tinyad.autoDiff.operators.binary_ops import Add, Mult, Exp
 from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
 
 
@@ -46,7 +46,7 @@ class BaseTest(unittest.TestCase):
     
 
 
-    def _verify_gradients(self, variables: List[Var], expected_gradients: List[NUM], counts: List[NUM]):
+    def _verify_gradients(self, variables: List[Var], expected_gradients: List[NUM], counts: List[NUM], places: Optional[int]=None):
         """Verify that the actual gradients match expected gradients."""
         for i, var in enumerate(variables):
             if counts[i] == 0:
@@ -59,12 +59,13 @@ class BaseTest(unittest.TestCase):
                 self.assertAlmostEqual(
                     var.grad, 
                     expected_gradients[i],
+                    places=places,
                     msg=f"Variable {i} gradient incorrect. Expected {expected_gradients[i]}, got {var.grad}"
                 )
 
     ########################### Multiplicative term helper functions ###########################
 
-    def _create_multiplicative_term(self, variables: List[Var], max_subset_size=5) -> Tuple[Var, Dict[int, int]]:
+    def _create_multiplicative_term_int_expos(self, variables: List[Var], max_subset_size=5) -> Tuple[Var, Dict[int, int]]:
         """Create a single polynomial term with random variables and powers."""
         n_vars = len(variables)
         subset_size = random.randint(1, min(max_subset_size, n_vars))
@@ -125,6 +126,33 @@ class BaseTest(unittest.TestCase):
                     expected_gradients[var_idx] += term_sign * term_coefficient
         
         return expected_gradients
+
+
+    def _create_multiplicative_term_float_expos(self, variables: List[Var], max_subset_size=5) -> Tuple[Var, Dict[int, float]]:
+        """
+        Create a single polynomial term with random variables and powers using the Exp operator.
+        This allows for floating-point exponents, unlike _create_multiplicative_term_int_expos.
+        """
+        n_vars = len(variables)
+        subset_size = random.randint(1, min(max_subset_size, n_vars))
+        var_indices = random.sample(range(n_vars), subset_size)
+        
+        # Assign random exponents (powers) to each variable in this term
+        exponents = {}
+        for idx in var_indices:
+            # Use floating point exponents between 0.1 and 5.0
+            exponents[idx] = round(random.uniform(0.1, 5.0), 2)
+        
+        # Create the product expression for this term
+        term = ConstantVar("const", 1.0)
+        for idx, power in exponents.items():
+            # Use Exp operator instead of repeated multiplication
+            var_term = Exp(variables[idx], ConstantVar(f"p_{idx}", power))
+            term = Mult(term, var_term)
+        
+        # The exponents variable is a dictionary that maps the variable index (from the original `variables` list)
+        # to the power to which the variable is raised in this term
+        return term, exponents
 
     ########################### Additive term helper functions ###########################
 
@@ -210,7 +238,8 @@ class BaseTest(unittest.TestCase):
 
 
     ########################### Additive-Exponential term helper functions ###########################
-    def _calculate_gradient_multiplication_additive_term_and_multiplicative_term(self, variables: List[Var], 
+    def _calculate_gradient_multiplication_additive_term_and_multiplicative_term(self, 
+                                                                                variables: List[Var], 
                                                                                 additive_term_coeffs: Dict[int, NUM], 
                                                                                 multiplicative_term_exponents: Dict[int, int]) -> List[NUM]:
         """Calculate expected gradients when an additive term is multiplied by a multiplicative term."""
@@ -228,7 +257,8 @@ class BaseTest(unittest.TestCase):
 
         return gradients
 
-    def _create_additive_exponential_term(self, variables: List[Var], max_subset_size=5) -> Tuple[Var, Dict[int, Tuple[NUM, int]]]:
+
+    def _create_additive_exponential_term_int_expos(self, variables: List[Var], max_power:NUM, max_subset_size=5) -> Tuple[Var, Dict[int, Tuple[NUM, int]]]:
         """
         Create a single additive-exponential term of the form: a₁x₁^p₁ + a₂x₂^p₂ + ... + aₙxₙ^pₙ
         
@@ -245,7 +275,7 @@ class BaseTest(unittest.TestCase):
         for idx in term_indices:
             # Generate random coefficient and power for each variable
             coeff = round(random.uniform(-2, 2), 2)
-            power = random.randint(1, 4)  # Use powers between 1 and 4 for reasonable values
+            power = random.randint(1, max_power) 
             coeffs_and_powers[idx] = (coeff, power)
         
         # Build the additive-exponential term
@@ -261,11 +291,13 @@ class BaseTest(unittest.TestCase):
         
         return term, coeffs_and_powers
 
+
     def _calculate_additive_exponential_term_value(self, variables: List[Var], 
                                                  coeffs_and_powers: Dict[int, Tuple[NUM, int]]) -> NUM:
         """Calculate the value of an additive-exponential term."""
         return sum(coeff * (variables[idx].value ** power) 
                   for idx, (coeff, power) in coeffs_and_powers.items())
+
 
     def _calculate_gradient_additive_exponential_term(self, variables: List[Var], 
                                                     coeffs_and_powers: Dict[int, Tuple[NUM, int]],
@@ -283,6 +315,7 @@ class BaseTest(unittest.TestCase):
                 gradients[idx] = coeff * power * (variables[idx].value ** (power - 1)) * upstream_gradient
         
         return gradients
+
 
     def _calculate_gradient_multiplication_two_additive_exponential_terms(self, 
                                                                         variables: List[Var],
@@ -322,5 +355,37 @@ class BaseTest(unittest.TestCase):
             gradients[idx] = gradient
         
         return gradients
+
+
+    def _create_additive_exponential_term_float_expos(self, variables: List[Var], max_subset_size=5) -> Tuple[Var, Dict[int, Tuple[NUM, int]]]:
+        """
+        Create a single additive-exponential term of the form: a₁x₁^p₁ + a₂x₂^p₂ + ... + aₙxₙ^pₙ
+        
+        Returns:
+            Tuple of (term expression, coefficients_and_powers dict)
+            where coefficients_and_powers maps variable index to (coefficient, power) tuple
+        """
+        n_vars = len(variables)
+        term_size = random.randint(1, min(max_subset_size, n_vars))
+        term_indices = random.sample(range(n_vars), term_size)
+        
+        # Dictionary mapping variable index -> (coefficient, power)
+        coeffs_and_powers = {}
+        for idx in term_indices:
+            # Generate random coefficient and power for each variable
+            coeff = round(random.uniform(-2, 2), 2)
+            power = round(random.uniform(0.1, 3.0), 2)
+            coeffs_and_powers[idx] = (coeff, power)
+        
+        # Build the additive-exponential term
+        term = ConstantVar("zero", 0.0)
+        for idx, (coeff, power) in coeffs_and_powers.items():
+            # Create x^power
+            var_term = Exp(variables[idx], ConstantVar(f"p_{idx}", power))
+            
+            # Add a_i * x_i^power to the sum
+            term = Add(term, Mult(ConstantVar(f"c_{idx}", coeff), var_term))
+        
+        return term, coeffs_and_powers
 
 
