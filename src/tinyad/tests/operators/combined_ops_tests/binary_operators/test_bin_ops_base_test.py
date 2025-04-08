@@ -2,8 +2,11 @@ import random
 from typing import Callable, Dict, List, Optional, Tuple
 import unittest
 
+import numpy as np
+
 from tinyad.autoDiff.common import NUM
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Exp
+from tinyad.autoDiff.operators.unary_ops import AbsVal
 from tinyad.autoDiff.var import ConstantVar, Var
 from tinyad.tests.operators.combined_ops_tests.combinedBaseTest import CombinedBaseTest
 
@@ -111,9 +114,14 @@ class BinaryOperatorsBaseTest(CombinedBaseTest):
         n_vars = len(variables)
         term_size = random.randint(1, min(max_subset_size, n_vars))
         term_indices = random.sample(range(n_vars), term_size)
-        term_coeffs = {idx: round(random.uniform(-2, 2), 2) for idx in term_indices}
-        
 
+        term_coeffs = {}    
+        for idx in term_indices:
+            coeff = round(random.uniform(-2, 2), 2)
+            while coeff == 0:
+                coeff = round(random.uniform(-2, 2), 2)
+            term_coeffs[idx] = coeff
+        
         # 3. Build the additive terms
         term = ConstantVar("zero", 0.0)
         for idx, coeff in term_coeffs.items():
@@ -244,6 +252,12 @@ class BinaryOperatorsBaseTest(CombinedBaseTest):
         return sum(coeff * (variables[idx].value ** power) 
                   for idx, (coeff, power) in coeffs_and_powers.items())
 
+    def _calculate_abs_additive_exponential_term_value(self, variables: List[Var], 
+                                                 coeffs_and_powers: Dict[int, Tuple[NUM, int]]) -> NUM:
+        """Calculate the value of an additive-exponential term."""
+        return sum(abs(coeff * (variables[idx].value ** power)) 
+                  for idx, (coeff, power) in coeffs_and_powers.items())
+    
 
     def _calculate_gradient_additive_exponential_term(self, variables: List[Var], 
                                                     coeffs_and_powers: Dict[int, Tuple[NUM, int]],
@@ -266,7 +280,8 @@ class BinaryOperatorsBaseTest(CombinedBaseTest):
     def _calculate_gradient_multiplication_two_additive_exponential_terms(self, 
                                                                         variables: List[Var],
                                                                         term1_coeffs_powers: Dict[int, Tuple[NUM, int]],
-                                                                        term2_coeffs_powers: Dict[int, Tuple[NUM, int]]) -> List[NUM]:
+                                                                        term2_coeffs_powers: Dict[int, Tuple[NUM, int]],
+                                                                        ) -> List[NUM]:
         """
         Calculate expected gradients when two additive-exponential terms are multiplied.
         Applies the product rule: d/dx(f*g) = (df/dx)*g + f*(dg/dx)
@@ -334,4 +349,82 @@ class BinaryOperatorsBaseTest(CombinedBaseTest):
         
         return term, coeffs_and_powers
 
+
+    def _create_additive_abs_exponential_term(self, variables: List[Var], max_subset_size:int=5) -> Tuple[Var, Dict[int, Tuple[NUM, int]]]:
+        """
+        Create a single additive-exponential term of the form: |a₁x₁^p₁ + a₂x₂^p₂ + ... + aₙxₙ^pₙ|
+        """
+        n_vars = len(variables)
+        term_size = random.randint(1, min(max_subset_size, n_vars))
+        term_indices = random.sample(range(n_vars), term_size)
+        
+        # Dictionary mapping variable index -> (coefficient, power)
+        coeffs_and_powers = {}
+        for idx in term_indices:
+            # Generate random coefficient and power for each variable
+            coeff = round(random.uniform(-2, 2), 2)
+
+            while coeff == 0:
+                coeff = round(random.uniform(-2, 2), 2) 
+
+            power = round(random.uniform(0.1, 3.0), 2)
+            coeffs_and_powers[idx] = (coeff, power)
+        
+        # Build the additive-exponential term
+        term = ConstantVar("zero", 0.0)
+        for idx, (coeff, power) in coeffs_and_powers.items():
+            # Create |x^power|
+            var_term = Exp(variables[idx], ConstantVar(f"p_{idx}", power))
+            
+            # Add |a_i * x_i^power| to the sum
+            term = Add(term, AbsVal(Mult(ConstantVar(f"c_{idx}", coeff), var_term)))
+
+        return term, coeffs_and_powers
+        
+
+    def _calculate_grad_mult_2_abs_additive_exp_terms(self, 
+                                                    variables: List[Var],
+                                                    term1_coeffs_powers: Dict[int, Tuple[NUM, int]],
+                                                    term2_coeffs_powers: Dict[int, Tuple[NUM, int]],
+                                                    ) -> List[NUM]:
+        """
+        Calculate expected gradients when two additive-exponential terms with absolute values 
+        |a_i * x_i^p_i + a_2 * x_2^p_2 + ... + a_n * x_n^p_n| are multiplied.
+        
+        Applies the product rule: d/dx(f*g) = (df/dx)*g + f*(dg/dx)
+        
+        let L1 = |a_1 * x_1^p_1 + a_2 * x_2^p_2 + ... + a_n * x_n^p_n| 
+        d L1 / dx_i = sign(a_i * x_i^p_i + a_2 * x_2^p_2 + ... + a_n * x_n^p_n) * (p_i * x_i^(p_i-1)) * a_i
+
+        """
+        n_vars = len(variables)
+        gradients = [0] * n_vars
+        
+        # Calculate values of each additive-exponential term
+        term1_value = self._calculate_additive_exponential_term_value(variables, term1_coeffs_powers)
+        term2_value = self._calculate_additive_exponential_term_value(variables, term2_coeffs_powers)
+        
+        # For each variable, apply the product rule
+        for idx in range(n_vars):
+            gradient = 0
+            
+            # Check if variable appears in first term
+            if idx in term1_coeffs_powers:
+                coeff1, power1 = term1_coeffs_powers[idx]
+                # df1/dx_i = coeff1 * power1 * x_i^(power1-1)
+                if power1 > 0:
+                    df1_dxi = np.sign(term1_value).item() * coeff1 * power1 * (variables[idx].value ** (power1 - 1))
+                    gradient += df1_dxi * abs(term2_value)
+            
+            # Check if variable appears in second term
+            if idx in term2_coeffs_powers:
+                coeff2, power2 = term2_coeffs_powers[idx]
+                # df2/dx_i = coeff2 * power2 * x_i^(power2-1)
+                if power2 > 0:
+                    df2_dxi = np.sign(term2_value).item() * coeff2 * power2 * (variables[idx].value ** (power2 - 1))
+                    gradient += df2_dxi * abs(term1_value)
+            
+            gradients[idx] = gradient
+        
+        return gradients
 

@@ -6,10 +6,10 @@ import numpy as np
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div, Exp
 from tinyad.autoDiff.operators.unary_ops import AbsVal, Neg
 from tinyad.autoDiff.var import ElementaryVar, ConstantVar
-from tinyad.tests.operators.combined_ops_tests.binary_operators.bin_ops_base_test import BinaryOperatorsBaseTest
+from tinyad.tests.operators.combined_ops_tests.binary_operators.test_bin_ops_base_test import BinaryOperatorsBaseTest
 
 
-class TestUnaryBinaryBasicCombinations(BinaryOperatorsBaseTest):
+class TestAllOperatorsBasicCombinations(BinaryOperatorsBaseTest):
     """Test class for combined operations of Unary and Binary operators.""" 
 
 
@@ -385,55 +385,56 @@ class TestUnaryBinaryBasicCombinations(BinaryOperatorsBaseTest):
             self.assertAlmostEqual(x1.grad, x2.grad)
 
 
-    # def test_absval_exp_odd(self):
-    #     """
-    #     Test that |x|^n = |x| * x^(n-1) when n is odd.
-    #     This identity helps verify the relationship between absolute value and odd powers.
-    #     """
-    #     for _ in range(1000):
-    #         # Generate a random value (including negative values)
-    #         x_val = random.uniform(-10, 10)
+    def test_absval_exp_odd(self):
+        """
+        Test that |x|^n = |x| * x^(n-1) when n is odd.
+        This identity helps verify the relationship between absolute value and odd powers.
+        """
+        for _ in range(1000):
+            # Generate a random value (including negative values)
+            x_val = random.uniform(-3, 3)
             
-    #         # Ensure x is not too close to zero to avoid numerical issues
-    #         if abs(x_val) < 1e-6:
-    #             x_val = 1.0 if random.random() > 0.5 else -1.0
+            # Ensure x is not too close to zero to avoid numerical issues
+            if abs(x_val) < 1e-6:
+                x_val = 1.0 if random.random() > 0.5 else -1.0
                 
-    #         # Generate a random odd exponent
-    #         n_val = 2 * random.randint(1, 5) + 1  # 3, 5, 7, 9, 11
+            # Generate a random odd exponent
+            n_val = 2 * random.randint(1, 4) + 1  # 3, 5, 7, 9, 11
             
-    #         # Create variables
-    #         x1 = ElementaryVar("x1", x_val)
-    #         x2 = ElementaryVar("x2", x_val)
-    #         x3 = ElementaryVar("x3", x_val)
-    #         n = ConstantVar("n", n_val)
-    #         n_minus_1 = ConstantVar("n-1", n_val - 1)
+            # Create variables
+            x1 = ElementaryVar("x1", x_val)
+            x2 = ElementaryVar("x2", x_val)
+            n = ConstantVar("n", n_val)
+            n_minus_1 = ConstantVar("n-1", n_val - 1)
             
-    #         # Expression 1: |x|^n
-    #         abs_x_pow_n = Exp(AbsVal(x1), n)
+            # Expression 1: |x|^n
+            abs_x_pow_n = Exp(AbsVal(x1), n)
             
-    #         # Expression 2: |x| * x^(n-1)
-    #         abs_x = AbsVal(x2)
-    #         x_pow_n_minus_1 = Exp(x3, n_minus_1)
-    #         identity_expr = Mult(abs_x, x_pow_n_minus_1)
+            # Expression 2: |x| * x^(n-1)
+            abs_x = AbsVal(x2)
+            x_pow_n_minus_1 = Exp(x2, n_minus_1)
+            identity_expr = Mult(abs_x, x_pow_n_minus_1)
             
-    #         # Compute and verify both expressions have same value
-    #         abs_x_pow_n_value = abs_x_pow_n.compute()
-    #         identity_expr_value = identity_expr.compute()
+            # Compute and verify both expressions have same value
+            abs_x_pow_n_value = abs_x_pow_n.compute()
+            identity_expr_value = identity_expr.compute()
             
-    #         self.assertAlmostEqual(abs_x_pow_n_value, identity_expr_value)
+            self.assertAlmostEqual(abs_x_pow_n_value, identity_expr_value)
             
-    #         # Check the expected mathematical value (should be |x|^n)
-    #         expected_value = (abs(x_val) ** n_val)
-    #         self.assertAlmostEqual(abs_x_pow_n_value, expected_value)
+            # Check the expected mathematical value (should be |x|^n)
+            expected_value = (abs(x_val) ** n_val)
+            self.assertAlmostEqual(abs_x_pow_n_value, expected_value)
             
-    #         # Alternative calculation: |x| * x^(n-1)
-    #         alt_expected = abs(x_val) * (x_val ** (n_val - 1))
-    #         self.assertAlmostEqual(identity_expr_value, alt_expected)
+            # Alternative calculation: |x| * x^(n-1)
+            alt_expected = abs(x_val) * (x_val ** (n_val - 1))
+            self.assertAlmostEqual(identity_expr_value, alt_expected)
             
-    #         # Backward pass
-    #         abs_x_pow_n.backward()
-    #         identity_expr.backward()
-            
+            # Backward pass
+            abs_x_pow_n.backward()
+            identity_expr.backward()
+
+            self.assertAlmostEqual(x1.grad, n_val * abs(x_val) ** (n_val - 1) * np.sign(x_val))
+            self.assertAlmostEqual(x1.grad, x2.grad)
 
 
 if __name__ == '__main__':

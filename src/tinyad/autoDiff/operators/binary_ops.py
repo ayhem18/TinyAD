@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Optional
+import warnings
 
 from ..common import NUM
 from ..var import ConstantVar, Var
@@ -166,6 +167,9 @@ class Exp(BinaryOp):
         if not isinstance(exponent, ConstantVar):
             raise TypeError("Exponent must be a ConstantVar")
         
+        if abs(base.compute()) < 1e-8:
+            warnings.warn("The base is too close to zero. This might be lead to numerical issues")
+
         # Store the exponent value for easier access
         self.exponent_value = exponent.compute()
 

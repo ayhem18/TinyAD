@@ -53,7 +53,7 @@ class TestNegAbsCombinations(unittest.TestCase):
 
     def test_multiple_absolute_negation_composition(self):
         """Test multiple compositions of negation and absolute value."""
-        for _ in range(500):
+        for _ in range(5000):
             x_val = round(random.uniform(-100, 100), 4)
             x = ElementaryVar("x", x_val)
             
@@ -77,7 +77,7 @@ class TestNegAbsCombinations(unittest.TestCase):
                     expected = abs(expected)
                 elif op == Neg:
                     expected = -expected
-            self.assertEqual(computed, expected)
+            self.assertEqual(computed, expected, "the forward pass is buggy")
 
             # the resulting function can be computed in a closed form
             # find the last index of an AbsVal operation
@@ -89,14 +89,28 @@ class TestNegAbsCombinations(unittest.TestCase):
                 
             num_negations = n_ops - 1 - last_abs_val_idx
             coeff = 1 if num_negations % 2 == 0 else -1
-            res = abs(x_val)  * coeff
             
-            self.assertEqual(expected, res) 
+            
+            if last_abs_val_idx == -1: 
+                # this is an extreme case where no AbsVal operation is present 
+                # the resulting function is just a polynomial
+                res = x_val * coeff
+                self.assertEqual(expected, res, f"the alternative computation for the extreme case is buggy. Found: {res}, expected: {expected}") 
+                result.backward()
+                expected_grad = coeff
+                self.assertEqual(x.grad, expected_grad, f"the gradient for the extreme case is buggy. Found: {x.grad}, expected: {expected_grad}")
 
+                # make sure to move to the next iteration.
+                continue
+    
+            # at this point, we know that there is at least one AbsVal operation 
+            res = abs(x_val)  * coeff
+            self.assertEqual(expected, res, f"the alternative computation is buggy. Found: {res}, expected: {expected}") 
             # Test gradient
             result.backward()
-            expected_grad = np.sign(x_val) * coeff
-            self.assertEqual(x.grad, expected_grad)
+            expected_grad = np.sign(x_val).item() * coeff
+            self.assertEqual(x.grad, expected_grad, f"the gradient is buggy. Found: {x.grad}, expected: {expected_grad}")
+
 
     def test_zero_crossing_behavior(self):
         """Test behavior of negation and absolute value around x=0."""
