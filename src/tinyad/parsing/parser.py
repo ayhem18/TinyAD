@@ -3,13 +3,13 @@ This module contains a simple parser of mathematical expressions.
 """
 
 
-from ast import Mult
 import re
 
 from collections import defaultdict, deque
 from typing import Dict, List, Optional, Tuple
 
 from tinyad.autoDiff.common import NUM
+from tinyad.autoDiff.operators.binary_ops import Mult
 from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
 
 
@@ -122,8 +122,6 @@ def parse_variable(string: str) -> Tuple[str, int]:
         return var, 1
 
     # at this point,we know that variable is of the form x_     
-
-
     i = 2
     while i < len(string) and string[i].isdigit():
         i += 1
@@ -150,7 +148,7 @@ def parse_no_operators(expression: str,
         A Var object.
     """
     # the first step is to make sure that the expression includes only variables and numbers
-    if re.match(r'^[a-zA-Z0-9_]+$', expression) is None:
+    if re.match(r'^[a-zA-Z0-9_\.]+$', expression) is None:
         raise ValueError("The expression must include only variables and numbers")
     
     # the second step is to parse the expression
@@ -159,8 +157,9 @@ def parse_no_operators(expression: str,
     
     try:
         number, i = parse_number(expression)
-        number_var = ConstantVar(number)
+        number_var = ConstantVar(str(number),number)
         var_position_tracker[(0, i)] = number_var
+        var_name_tracker[str(number)] = number_var
 
     except ValueError:
         number = 0
@@ -169,15 +168,22 @@ def parse_no_operators(expression: str,
     var_names = []
     traverse_index = i
 
+    current_string = expression[traverse_index:]
 
     while traverse_index < len(expression):
         try:
-            var_name, i = parse_variable(expression[traverse_index:])
+            var_name, i = parse_variable(current_string)
         except ValueError: 
-            raise ValueError(f"A basic expression is expected to be either")
-        var_position_tracker[(traverse_index, traverse_index + i)] = ElementaryVar(var_name, None)
-        var_name_tracker[var_name] = var_position_tracker[(traverse_index, traverse_index + i)]
+            raise ValueError(f"a basic (no operator) expression is expected to be an optional number followed by a series of variables.")
+
+        if var_name in var_name_tracker:
+            var_position_tracker[(traverse_index, traverse_index + i)] = var_name_tracker[var_name]
+        else:
+            var_position_tracker[(traverse_index, traverse_index + i)] = ElementaryVar(var_name, None)
+            var_name_tracker[var_name] = var_position_tracker[(traverse_index, traverse_index + i)]
+            
         var_names.append(var_name)      
+        current_string = current_string[i:]
         traverse_index += i
 
     # the final variable is basically the product of all variables
@@ -189,6 +195,6 @@ def parse_no_operators(expression: str,
     for var_name in var_names:
         final_var = Mult(final_var, var_name_tracker[var_name])
 
-    var_position_tracker[(0, len(expression))] = final_var
+    # var_position_tracker[(0, len(expression))] = final_var
 
     return final_var
