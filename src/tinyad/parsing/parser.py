@@ -8,12 +8,15 @@ import re
 from collections import defaultdict, deque
 from typing import Dict, List, Optional, Tuple
 
+from numpy import copy
+
 from tinyad.autoDiff.common import NUM
 from tinyad.autoDiff.operators.binary_ops import Mult
+from tinyad.autoDiff.operators.unary_ops import Neg
 from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
 
 
-DEFAULT_SUPPORTED_OPERATORS = ['*', '+', '-', '/']
+DEFAULT_SUPPORTED_OPERATORS = ['*', '+', '-', '/', '^']
 
 
 def process_expression(expression: str) -> str:
@@ -133,10 +136,75 @@ def parse_variable(string: str) -> Tuple[str, int]:
     return string[:i], i
 
 
-def parse_no_operators(expression: str,
-                       var_position_tracker: Dict[Tuple[int, int], Var],
-                       var_name_tracker: Dict[str, Var]
-                       ) -> Var:
+# def parse_no_operators(expression: str,
+#                        var_position_tracker: Dict[Tuple[int, int], Var],
+#                        var_name_tracker: Dict[str, Var]
+#                        ) -> Var:
+
+#     """
+#     This function parses a mathematical expression that does not contain any operators and converts it into a Var object.
+
+#     Args:
+#         expression: A string representing a mathematical expression.
+
+#     Returns:
+#         A Var object.
+#     """
+#     # the first step is to make sure that the expression includes only variables and numbers
+#     if re.match(r'^[a-zA-Z0-9_\.]+$', expression) is None:
+#         raise ValueError("The expression must include only variables and numbers")
+    
+#     # the second step is to parse the expression
+#     # we need to find the first number in the expression (if any)
+#     number_var = None
+    
+#     try:
+#         number, i = parse_number(expression)
+#         number_var = ConstantVar(str(number),number)
+#         var_position_tracker[(0, i)] = number_var
+#         var_name_tracker[str(number)] = number_var
+
+#     except ValueError:
+#         number = 0
+#         i = 0
+   
+#     var_names = []
+#     traverse_index = i
+
+#     current_string = expression[traverse_index:]
+
+#     while traverse_index < len(expression):
+#         try:
+#             var_name, i = parse_variable(current_string)
+#         except ValueError: 
+#             raise ValueError(f"a basic (no operator) expression is expected to be an optional number followed by a series of variables.")
+
+#         if var_name in var_name_tracker:
+#             var_position_tracker[(traverse_index, traverse_index + i)] = var_name_tracker[var_name]
+#         else:
+#             var_position_tracker[(traverse_index, traverse_index + i)] = ElementaryVar(var_name, None)
+#             var_name_tracker[var_name] = var_position_tracker[(traverse_index, traverse_index + i)]
+            
+#         var_names.append(var_name)      
+#         current_string = current_string[i:]
+#         traverse_index += i
+
+#     # the final variable is basically the product of all variables
+#     if number_var is not None:
+#         final_var = number_var
+#     else:
+#         final_var = ConstantVar(f"({0},{len(expression)})", 1)
+
+#     for var_name in var_names:
+#         final_var = Mult(final_var, var_name_tracker[var_name])
+
+#     # var_position_tracker[(0, len(expression))] = final_var
+
+#     return final_var
+
+def parse_no_operators2(expression: str,
+                        var_name_tracker: Dict[str, Var],
+                       ) -> Tuple[List[Var], Dict[Tuple[int, int], Var]]:
 
     """
     This function parses a mathematical expression that does not contain any operators and converts it into a Var object.
@@ -154,12 +222,17 @@ def parse_no_operators(expression: str,
     # the second step is to parse the expression
     # we need to find the first number in the expression (if any)
     number_var = None
-    
+
+    var_position_tracker = {}
+
+    variables = []
+
     try:
         number, i = parse_number(expression)
         number_var = ConstantVar(str(number),number)
         var_position_tracker[(0, i)] = number_var
         var_name_tracker[str(number)] = number_var
+        variables.append(number_var)
 
     except ValueError:
         number = 0
@@ -181,20 +254,152 @@ def parse_no_operators(expression: str,
         else:
             var_position_tracker[(traverse_index, traverse_index + i)] = ElementaryVar(var_name, None)
             var_name_tracker[var_name] = var_position_tracker[(traverse_index, traverse_index + i)]
-            
+        
+        variables.append(var_name_tracker[var_name])
         var_names.append(var_name)      
         current_string = current_string[i:]
         traverse_index += i
 
-    # the final variable is basically the product of all variables
-    if number_var is not None:
-        final_var = number_var
+
+    return variables, var_position_tracker
+
+
+def extend_expression(expression:str, precomputed: Dict[Tuple[int, int], Var], global_var_name_tracker: Dict[Tuple[int, int], Var]) -> Var:
+    """
+    This function parses a mathematical expression and converts it into a Var object.
+    """
+    exp = copy(expression.lower())
+
+    # the step here is variables with parentheses here. 
+    for start, end in global_var_name_tracker.items():
+        exp[start:end] = "&" * (end - start) 
+
+    # now we are guaranteed that the expression is a valid expression without parentheses 
+    # we can now parse the expression 
+
+    # determine all operators 
+    ops_indices = [i for i, c in enumerate(exp) if c in DEFAULT_SUPPORTED_OPERATORS]
+
+    # the expression will be reconstructed by adding the implicit multiplication operators 
+    # between the variables 
+
+
+    # we need to add the implicit multiplication operators between the variables 
+    
+    new_expression = expression[:ops_indices[0] + 1]
+    new_precomputed = {}
+    
+    if len(new_expression) > 0:
+        variables, _ = parse_no_operators2(new_expression, global_var_name_tracker)
     else:
-        final_var = ConstantVar(f"({0},{len(expression)})", 1)
+        variables = []
 
-    for var_name in var_names:
-        final_var = Mult(final_var, var_name_tracker[var_name])
 
-    # var_position_tracker[(0, len(expression))] = final_var
+    for i in range(len(ops_indices)):
+        current_idx = ops_indices[i]
+        next_idx = ops_indices[i + 1] if i + 1 < len(ops_indices) else len(exp) 
 
-    return final_var
+        exp_no_ops = expression[current_idx + 1:next_idx]
+
+        if (current_idx + 1, next_idx) in precomputed:
+            new_precomputed[len(new_expression), len(new_expression) + len(exp_no_ops)] = precomputed[(current_idx + 1, next_idx)]
+            new_expression += "&" * len(exp_no_ops)
+            variables.append(precomputed[(current_idx + 1, next_idx)])
+        else:
+            inner_vars, var_position_tracker = parse_no_operators2(exp_no_ops, global_var_name_tracker) 
+            inner_expression = "*".join([v.name for v in inner_vars])
+            new_expression += inner_expression
+            variables.extend(inner_vars)
+
+    return new_expression, variables, new_precomputed
+
+
+def parse_expression(extended_expression:str, variables: List[Var]) -> Var:
+    """
+    This function parses a mathematical expression and converts it into a Var object.
+    """
+    ops_indices = [i for i, c in enumerate(extended_expression) if c in DEFAULT_SUPPORTED_OPERATORS]
+
+    op2indices = {"+": [], "-": [], "*": [], "/": [], "^": []}
+    for i, c in enumerate(extended_expression):
+        op2indices[c].append(i)
+
+
+    if ops_indices[0] == 0:
+        if extended_expression[0] != '-':
+            raise ValueError("if the expression starts with an operator, it must be a '-'")
+        else:
+            variables[0] = Neg(variables[0]) 
+            ops_indices = ops_indices[1:]
+
+    if len(ops_indices) != len(variables) - 1:
+        raise ValueError("something happened")
+
+    ops_precedence = ["^", "*", "/", "+", "-"]
+
+    for op in ops_precedence:
+        if len(op2indices[op]) == 0:
+            continue
+        indices = op2indices[op] 
+        
+        for idx in indices: 
+            op1, op2 = variables[idx], variables[idx + 1]
+            
+            pass
+
+
+def parse_expression_no_parentheses(expression: str, var_name_tracker: Dict[str, Var], var_position_tracker: Dict[Tuple[int, int], Var]) -> Var:
+    """
+    This function parses a mathematical expression and converts it into a Var object.
+    """
+    exp = copy(expression.lower())
+
+    # we assume here that the variable position tracker is adjusted to the expression length
+    
+    # the step here is variables with parentheses here. 
+    for start, end in var_position_tracker.items():
+        exp[start:end] = "&" * (end - start) 
+
+    # now we are guaranteed that the expression is a valid expression without parentheses 
+    # we can now parse the expression 
+
+    # determine all operators 
+    ops_indices = [i for i, c in enumerate(exp) if c in DEFAULT_SUPPORTED_OPERATORS]
+
+    # xyz ^ 4
+
+
+    vars = []
+
+    for i in range(len(ops_indices)):
+        current_idx = ops_indices[i]
+        next_idx = ops_indices[i + 1] if i + 1 < len(ops_indices) else len(exp) 
+
+        exp_no_ops = exp[current_idx + 1:next_idx] 
+
+        if (current_idx + 1, next_idx) in var_position_tracker:
+            vars.append(var_position_tracker[(current_idx + 1, next_idx)])
+        else:
+            vars.append(parse_no_operators(exp_no_ops, var_position_tracker, var_name_tracker)) 
+
+    if ops_indices[0] == 0:
+        if exp[0] != '-':
+            raise ValueError("if the expression starts with an operator, it must be a '-'")
+        else:
+            vars[0] = Neg(vars[0]) 
+            ops_indices = ops_indices[1:]
+
+    else:
+        # this means that code above did not include the first variable
+        first_var_exp = exp[:ops_indices[0]]
+        if (0, len(first_var_exp)) in var_position_tracker:
+            vars.insert(0, var_position_tracker[(0, len(first_var_exp))])
+        else:
+            vars.insert(0, parse_no_operators(first_var_exp, var_position_tracker, var_name_tracker))
+
+    
+    # at this point the number of operators must be exactly one less than the number of variables 
+    if len(ops_indices) != len(vars) - 1:
+        raise ValueError("something happened")
+
+    

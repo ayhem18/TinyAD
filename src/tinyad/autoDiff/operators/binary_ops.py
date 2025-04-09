@@ -2,8 +2,8 @@ from abc import abstractmethod
 from typing import Optional
 import warnings
 
-from ..common import NUM
-from ..var import ConstantVar, Var
+from ..common import NUM, Var
+from ..var import ConstantVar
 
 
 class BinaryOp(Var):

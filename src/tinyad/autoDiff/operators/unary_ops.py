@@ -3,8 +3,7 @@ import numpy as np
 from abc import abstractmethod
 from typing import Optional
 
-from ..common import NUM
-from ..var import Var
+from ..common import NUM, Var
 
 
 class UnaryOp(Var):

@@ -7,9 +7,8 @@ import random
 import unittest
 import numpy as np
 
-from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div, Exp
-from tinyad.autoDiff.operators.unary_ops import AbsVal, Neg
-from tinyad.autoDiff.var import ElementaryVar, ConstantVar
+from tinyad.autoDiff.operators.binary_ops import Mult, Div
+from tinyad.autoDiff.operators.unary_ops import AbsVal
 from tinyad.tests.operators.combined_ops_tests.binary_operators.test_bin_ops_base_test import BinaryOperatorsBaseTest
 
 

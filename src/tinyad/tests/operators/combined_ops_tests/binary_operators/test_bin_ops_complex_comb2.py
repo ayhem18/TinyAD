@@ -6,7 +6,7 @@ import unittest
 import random
 import numpy as np
 
-from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div, Exp
+from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Div
 from tinyad.autoDiff.var import ElementaryVar, ConstantVar
 from tinyad.tests.operators.combined_ops_tests.binary_operators.test_bin_ops_base_test import BinaryOperatorsBaseTest
 

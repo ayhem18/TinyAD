@@ -1,29 +1,6 @@
 from typing import Optional
-from abc import ABC, abstractmethod
 
-from .common import NUM
-
-class Var(ABC):
-    def __init__(self, name: str):
-        self.name = name
-        self.value = None
-        self.grad = None
-        self.children = []
-    
-    def __call__(self) -> "Var":
-        return self.forward()
-
-    @abstractmethod
-    def forward(self) -> "Var":
-        pass
-
-    @abstractmethod
-    def backward(self, value: Optional[NUM] = None):
-        pass
-
-    @abstractmethod
-    def compute(self) -> NUM:
-        pass 
+from .common import NUM, Var, IllegalStateError
 
 
 class ElementaryVar(Var):
@@ -44,6 +21,9 @@ class ElementaryVar(Var):
             self.grad += value
 
     def compute(self) -> NUM:
+        if self.value is None:
+            raise IllegalStateError("Value is not set for this variable")
+
         return self.value
     
 

@@ -4,10 +4,10 @@ import unittest
 
 import numpy as np
 
-from tinyad.autoDiff.common import NUM
+from tinyad.autoDiff.common import NUM, Var
 from tinyad.autoDiff.operators.binary_ops import Add, Mult, Exp
 from tinyad.autoDiff.operators.unary_ops import AbsVal
-from tinyad.autoDiff.var import ConstantVar, Var
+from tinyad.autoDiff.var import ConstantVar
 from tinyad.tests.operators.combined_ops_tests.combinedBaseTest import CombinedBaseTest
 
 class BinaryOperatorsBaseTest(CombinedBaseTest):
