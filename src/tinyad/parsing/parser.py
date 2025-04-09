@@ -3,11 +3,17 @@ This module contains a simple parser of mathematical expressions.
 """
 
 
+from ast import Mult
 import re
+
 from collections import defaultdict, deque
 from typing import Dict, List, Optional, Tuple
 
-from tinyad.autoDiff.var import Var
+from tinyad.autoDiff.common import NUM
+from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
+
+
+DEFAULT_SUPPORTED_OPERATORS = ['*', '+', '-', '/']
 
 
 def process_expression(expression: str) -> str:
@@ -72,3 +78,117 @@ def build_parentheses_tree(expression: str) -> Dict[int, List[Tuple[Optional[int
 
 
     return result
+
+
+
+def parse_number(string: str) -> Tuple[NUM, int]:
+    """
+    This functions goes through a string and tries to extract any number at the start of the string.
+    It returns the number and the index of the first character after the number.
+    """
+    number_str = ""
+    
+    i = 0
+    while i < len(string):
+        try:
+            number_str += string[i]
+            float(number_str)
+            i += 1
+        except ValueError:
+            # this means that the last character should be removed
+            number_str = number_str[:-1]
+            break
+
+    return float(number_str), i
+
+
+def parse_variable(string: str) -> Tuple[str, int]:
+    """
+    This function goes through a string and tries to extract any variable at the start of the string.
+    It returns the variable and the index of the first character after the variable.
+    """
+    # a variable that can two formats: either a single letter or a letter followed by an underscore and a number 
+    # the number must be an integer
+
+    if len(string) == 0:
+        raise ValueError("The variable must be at least one character long")
+
+    if not string[0].isalpha():
+        raise ValueError("The variable must start with a letter")
+
+    var = string[0] 
+    
+    if len(string) == 1 or string[1] != "_":
+        return var, 1
+
+    # at this point,we know that variable is of the form x_     
+
+
+    i = 2
+    while i < len(string) and string[i].isdigit():
+        i += 1
+
+    if i == 2:
+        # this means that there are no digits after the underscore
+        i = 1
+
+    return string[:i], i
+
+
+def parse_no_operators(expression: str,
+                       var_position_tracker: Dict[Tuple[int, int], Var],
+                       var_name_tracker: Dict[str, Var]
+                       ) -> Var:
+
+    """
+    This function parses a mathematical expression that does not contain any operators and converts it into a Var object.
+
+    Args:
+        expression: A string representing a mathematical expression.
+
+    Returns:
+        A Var object.
+    """
+    # the first step is to make sure that the expression includes only variables and numbers
+    if re.match(r'^[a-zA-Z0-9_]+$', expression) is None:
+        raise ValueError("The expression must include only variables and numbers")
+    
+    # the second step is to parse the expression
+    # we need to find the first number in the expression (if any)
+    number_var = None
+    
+    try:
+        number, i = parse_number(expression)
+        number_var = ConstantVar(number)
+        var_position_tracker[(0, i)] = number_var
+
+    except ValueError:
+        number = 0
+        i = 0
+   
+    var_names = []
+    traverse_index = i
+
+
+    while traverse_index < len(expression):
+        try:
+            var_name, i = parse_variable(expression[traverse_index:])
+        except ValueError: 
+            raise ValueError(f"A basic expression is expected to be either")
+        var_position_tracker[(traverse_index, traverse_index + i)] = ElementaryVar(var_name, None)
+        var_name_tracker[var_name] = var_position_tracker[(traverse_index, traverse_index + i)]
+        var_names.append(var_name)      
+        traverse_index += i
+
+    # the final variable is basically the product of all variables
+    if number_var is not None:
+        final_var = number_var
+    else:
+        final_var = ConstantVar(f"({0},{len(expression)})", 1)
+
+    for var_name in var_names:
+        final_var = Mult(final_var, var_name_tracker[var_name])
+
+    var_position_tracker[(0, len(expression))] = final_var
+
+    return final_var
