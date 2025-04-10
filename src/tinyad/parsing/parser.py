@@ -19,6 +19,7 @@ from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
 DEFAULT_SUPPORTED_OPERATORS = ['*', '+', '-', '/', '^']
 
 
+
 def process_expression(expression: str) -> str:
     """
     Process a mathematical expression to remove parentheses and other non-essential characters.
@@ -268,7 +269,12 @@ def extend_expression(expression:str,
     """
     This function parses a mathematical expression and converts it into a Var object.
     """
-    exp = deepcopy(process_expression(expression).lower())
+
+    #TODO: add some code to make sure the expression does not need to be processed. (otherwise, the precomputed indices will not match the resulting string)
+    # exp = deepcopy(process_expression(expression).lower())
+    exp = deepcopy(expression)
+
+    #TODO: add the code to verify whether the precomputed indices are as expected.
 
     # the step here is variables with parentheses here. 
     for start, end in global_var_name_tracker.items():
@@ -279,6 +285,13 @@ def extend_expression(expression:str,
 
     # determine all operators 
     ops_indices = [i for i, c in enumerate(exp) if c in DEFAULT_SUPPORTED_OPERATORS]
+
+    if len(ops_indices) == 0:
+        # this means that the expression does not contain any operators
+        # extract the variables, join them with the * operator and return the result
+        variables, _ = parse_no_operators2(exp, global_var_name_tracker)
+        return "*".join([v.name for v in variables]), variables, {}
+
 
     # the expression will be reconstructed by adding the implicit multiplication operators 
     # between the variables 

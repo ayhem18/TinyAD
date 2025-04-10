@@ -1,13 +1,16 @@
 import random
+from typing import Dict
 import unittest
 import numpy as np
 
-from tinyad.parsing.parser import parse_no_operators2, parse_number, parse_variable
-from tinyad.autoDiff.var import ConstantVar
+from tinyad.autoDiff.common import Var
 from tinyad.autoDiff.operators.binary_ops import Mult
+from tinyad.parsing.parser import evaluate_expression, extend_expression, parse_no_operators2, parse_number, parse_variable
+from tinyad.autoDiff.var import ConstantVar, ElementaryVar
+from tinyad.tests.parsing.parser_base_test import ParserBaseTest
 
 
-class TestParser(unittest.TestCase):
+class TestNoOperatorBlockParser(ParserBaseTest):
     def test_parse_number(self):
         """Test parsing of different numbers from strings."""
         # Basic integer cases
@@ -98,94 +101,21 @@ class TestParser(unittest.TestCase):
         # Create trackers for testing
 
 
-    def run_test(self, expression):
-        var_position_tracker = {}
-        var_name_tracker = {}
+    def run_test(self, expression: str, var_name_tracker: Dict[str, Var]):
         variables, var_position_tracker = parse_no_operators2(expression, var_name_tracker)
-        # result = parse_no_operators(expression, var_position_tracker, var_name_tracker)
-        
-        # Return for additional checks
-        return variables, var_position_tracker, var_name_tracker
-
-
-    def generate_random_variable_name(self) -> str:
-        """Generate a random variable name."""
-        # Generate a random letter (a-z, A-Z)
-        
-        letter = random.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-        var_name = letter
-        
-        # Optionally add an underscore and a number
-        if random.random() > 0.6:
-            var_name += "_"
-            var_name += str(random.randint(1, 999))
-
-        return var_name
-
-
-    def generate_random_expression(self, include_number=True, num_variables=None):
-        """Generate a random valid expression without operators.
-        
-        Returns:
-            tuple: (expression, variable_names, variable_positions)
-            - expression: the generated expression string
-            - variable_names: list of variable names in order of appearance
-            - variable_positions: list of (start, end) positions for each variable
-        """
-        expression = ""
-        variable_names = []
-        variable_positions = []
-        
-        # Step 1: Optionally add a number at the beginning
-        if include_number and random.random() > 0.2:
-            # Generate a random number (integer or float)
-            if random.random() > 0.5:
-                # Integer
-                num = float(random.randint(1, 1000))
-                num_str = str(num)
-            else:
-                # Float with 1-3 decimal places
-                num = random.uniform(0.1, 1000.0)
-                decimal_places = random.randint(1, 3)
-                num = round(num, decimal_places)
-                num_str = str(num)
-
-            expression += num_str
-        
-            variable_names.append(num_str)
-            variable_positions.append((0, len(num_str)))
-
-        # Step 2: Generate a random number of variables if not specified
-        if num_variables is None:
-            num_variables = random.randint(1, 10)
-        
-        var_names_set = set()
-
-        # Step 3: Generate random variables
-        for _ in range(num_variables):
-            var_start = len(expression)
-            
-            var_name = self.generate_random_variable_name()
-            
-            while var_name in var_names_set:
-                var_name = self.generate_random_variable_name()
-            
-            expression += var_name
-            variable_names.append(var_name)
-            var_names_set.add(var_name)
-            variable_positions.append((var_start, var_start + len(var_name)))
-        
-        return expression, variable_names, variable_positions
+        return variables, var_position_tracker
 
 
     def test_parse_no_operators_random(self):
         """Test parse_no_operators with many randomly generated valid expressions."""
         for _ in range(5000):  
-            # Generate a random expression
+            # Generate a random expression  
             expression, expected_vars, expected_positions = self.generate_random_expression()
             
+            var_name_tracker = {}
+
             # Parse the expression
-            variables, var_positions, name_tracker = self.run_test(expression)
+            variables, var_positions = self.run_test(expression, var_name_tracker)
 
             # make sure the position tracking is correct            
             self.assertEqual(len(var_positions), len(expected_positions))
@@ -194,14 +124,14 @@ class TestParser(unittest.TestCase):
 
 
             # Verify that all variables were correctly parsed
-            self.assertEqual(len(name_tracker), len(expected_vars))
+            self.assertEqual(len(variables), len(expected_vars))
             
             # Check that all expected variables are in the name tracker 
             for var_name in expected_vars:
-                self.assertIn(var_name, name_tracker)
+                self.assertIn(var_name, var_name_tracker)
             
 
-    def test_parse_no_operators_numeric_only(self):
+    def test_parse_no_operators_numeric_only(self): 
         """Test parse_no_operators with expressions containing only numerical values."""
         for _ in range(5000):  
             # Generate a random number (integer or float)
@@ -216,9 +146,10 @@ class TestParser(unittest.TestCase):
                 num = round(num, decimal_places)
                 num_str = str(num)
             
+            name_tracker = {}
             
             # Parse the expression
-            variables, var_positions, name_tracker = self.run_test(num_str)
+            variables, var_positions = self.run_test(num_str, name_tracker)
             
             # Verify results
             self.assertEqual(len(name_tracker), 1)  # No variables
@@ -230,7 +161,7 @@ class TestParser(unittest.TestCase):
             self.assertTrue(len(var_positions) == 1 and (0, len(num_str)) in var_positions)
     
 
-    def test_parse_no_operators_variables_only(self):
+    def test_parse_no_operators_variables_only(self):   
         """Test parse_no_operators with expressions containing only variables (no numbers)."""
         for _ in range(5000):  
             # Generate a random expression with only variables
@@ -240,7 +171,8 @@ class TestParser(unittest.TestCase):
             )
             
             # Parse the expression
-            variables, var_positions, name_tracker = self.run_test(expression)
+            var_name_tracker = {}   
+            variables, var_positions = self.run_test(expression, var_name_tracker)
 
             # make sure the position tracking is correct            
             self.assertEqual(len(var_positions), len(expected_positions))
@@ -248,13 +180,117 @@ class TestParser(unittest.TestCase):
                 self.assertEqual(pos, expected_positions[i])
 
             # Verify that all variables were correctly parsed
-            self.assertEqual(len(name_tracker), len(expected_vars))
+            self.assertEqual(len(variables), len(expected_vars))
             
             # Check that all expected variables are in the name tracker
             for var_name in expected_vars:
-                self.assertIn(var_name, name_tracker)
+                self.assertIn(var_name, var_name_tracker)
             
+
+    def test_same_var_object_for_same_name(self):
+        """Test that the same variable object is returned for the same name."""
+        for _ in range(20000):
+            # Generate a random expression with only variables
+            final_var_names = []
+            n1 = random.randint(2, 10)
+            n2 = random.randint(2, 10)
             
+            var_names = [self.generate_random_variable_name(max_underscore_num=9) for _ in range(n1)]
+            var_names = list(set(var_names))
+            n1 = len(var_names)
+
+            for _ in range(n2):
+                final_var_names.extend(var_names)
+
+            # generate a random expression with the variables
+            expression, expected_vars, expected_positions = self.generate_random_expression(
+                include_number=False, 
+                num_variables=None,
+                given_var_names=final_var_names
+            )
+
+            var_name_tracker = {}
+            variables, var_positions = self.run_test(expression, var_name_tracker)
+
+            # make sure the position tracking is correct            
+            self.assertEqual(len(var_positions), len(expected_positions))
+            for i, pos in enumerate(sorted(var_positions, key=lambda x: x[0])):
+                self.assertEqual(pos, expected_positions[i])
+
+            # verify that all variables are the same object
+            self.assertEqual(len(var_name_tracker), len(var_names))
+            
+            for var_name in expected_vars:
+                self.assertIn(var_name, var_name_tracker)
+             
+            for i in range(len(var_names)):
+                v = variables[i]
+                for j in range(n2):
+                    self.assertIs(v, variables[i + j * len(var_names)])
+
+            
+class TestParserLevel2Expressions(ParserBaseTest):
+    def test_extend_expression_only_vars(self):
+        """Test extend_expression with no precomputed variables."""
+        
+        for _ in range(5000): 
+            # 1. Generate a set of random variables
+            num_vars = random.randint(3, 8)
+            variables = [self.generate_random_variable_name().lower() for _ in range(num_vars)]
+
+            # 2. generate the explicit expression
+            explicit_expression, exp_indices = self.generate_random_expression_with_operators(variables)
+        
+            # 3. generate the implicit expression
+            implicit_expression = self.generate_inexplicit_expression_from_explicit(explicit_expression, num_removal=5, ops_indices=exp_indices)
+
+            # 4. Call extend_expression
+            precomputed = {}
+            global_var_name_tracker = {}
+            
+            new_expression, variables_list, _ = extend_expression(
+                implicit_expression, precomputed, global_var_name_tracker
+            )
+
+            # the returned expression must be the same as the explicit expression
+            self.assertEqual(new_expression, explicit_expression) 
+
+            # the variables list must be the same as the explicit variables
+            self.assertEqual(sorted([v.name for v in variables_list]), sorted(variables))
+
+
+    # def test_extend_expression_with_precomputed(self):
+    #     """Test extend_expression with precomputed variables."""
+    #     # Create some precomputed variables
+    #     x = ElementaryVar("x", 2.0)
+    #     y = ElementaryVar("y", 3.0)
+        
+    #     # Create a simple expression with implicit multiplication: "xy+5"
+    #     expression = "xy+5"
+        
+    #     # Set up precomputed dict - assume xy has been precomputed
+    #     precomputed = {(0, 2): Mult(x, y)}
+    #     global_var_name_tracker = {}
+        
+    #     # Call extend_expression
+    #     new_expression, variables_list, new_precomputed = extend_expression(
+    #         expression, precomputed, global_var_name_tracker
+    #     )
+        
+    #     # The new expression should be "&&+5" (xy replaced with && placeholders)
+    #     # and new_precomputed should contain the mapping for this
+        
+    #     # Check that the precomputed part is preserved
+    #     self.assertEqual(len(new_precomputed), 1, "Should have one precomputed variable")
+        
+    #     # The exact format may vary based on implementation, but variables_list should include:
+    #     # - The precomputed Mult(x, y)
+    #     # - The constant 5
+    #     self.assertEqual(len(variables_list), 2, "Should have two variables in the output")
+        
+    #     # Check that one of the variables is the precomputed Mult
+    #     self.assertTrue(any(isinstance(v, Mult) for v in variables_list), 
+    #                    "Output should include the precomputed Mult variable")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def f2():
     expression = "x y ^ 4 + x z + x * y ^ 2"
     var_name_tracker = {}
     res = evaluate_expression(expression, {}, var_name_tracker)
-    print(res)
+    print(res.name)
 
 
 if __name__ == "__main__":
