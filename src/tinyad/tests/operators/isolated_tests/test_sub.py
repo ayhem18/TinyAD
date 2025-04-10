@@ -19,7 +19,7 @@ class TestSubForwardBasic(unittest.TestCase):
         y = ElementaryVar("y", 3.0)
         sub = Sub(x, y)
         
-        self.assertEqual(sub.name, "-")
+        self.assertEqual(sub.name, "x-y")
         self.assertIsNone(sub.value)
         self.assertIsNone(sub.grad)
         self.assertEqual(sub.children, [x, y])

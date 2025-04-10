@@ -19,7 +19,7 @@ class TestAddForwardBasic(unittest.TestCase):
         y = ElementaryVar("y", 3.0)
         add = Add(x, y)
         
-        self.assertEqual(add.name, "+")
+        self.assertEqual(add.name, "x+y")
         self.assertIsNone(add.value)
         self.assertIsNone(add.grad)
         self.assertEqual(add.children, [x, y])

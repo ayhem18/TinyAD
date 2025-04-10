@@ -19,7 +19,7 @@ class TestExpForwardBasic(unittest.TestCase):
         n = ConstantVar("n", 3.0)
         exp = Exp(x, n)
         
-        self.assertEqual(exp.name, "^")
+        self.assertEqual(exp.name, "x^n")
         self.assertIsNone(exp.value)
         self.assertIsNone(exp.grad)
         self.assertEqual(exp.children, [x, n])

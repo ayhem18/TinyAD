@@ -20,7 +20,7 @@ class TestMultForwardBasic(unittest.TestCase):
         y = ElementaryVar("y", 3.0)
         mult = Mult(x, y)
         
-        self.assertEqual(mult.name, "*")
+        self.assertEqual(mult.name, "x*y")
         self.assertIsNone(mult.value)
         self.assertIsNone(mult.grad)
         self.assertEqual(mult.children, [x, y])

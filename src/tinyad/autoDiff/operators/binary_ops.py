@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import Optional
 import warnings
 
-from ..common import NUM, Var
+from ..common import NUM, IllegalStateError, Var
 from ..var import ConstantVar
 
 
@@ -29,7 +29,7 @@ class BinaryOp(Var):
 
 class Add(BinaryOp):
     def __init__(self, left: Var, right: Var):
-        super().__init__("+", left, right)
+        super().__init__(f"{left.name}+{right.name}", left, right)
 
 
     def forward(self) -> "Var":
@@ -61,7 +61,7 @@ class Add(BinaryOp):
 
 class Sub(BinaryOp):
     def __init__(self, left: Var, right: Var):
-        super().__init__("-", left, right)
+        super().__init__(f"{left.name}-{right.name}", left, right)
 
 
     def forward(self) -> "Var":
@@ -91,7 +91,7 @@ class Sub(BinaryOp):
 
 class Mult(BinaryOp):
     def __init__(self, left: Var, right: Var):
-        super().__init__("*", left, right)
+        super().__init__(f"{left.name}*{right.name}", left, right)
 
 
     def forward(self) -> "Var":
@@ -120,7 +120,7 @@ class Mult(BinaryOp):
 
 class Div(BinaryOp):
     def __init__(self, left: Var, right: Var, numerical_issue_tolerance: float = 1e-8):
-        super().__init__("/", left, right)
+        super().__init__(f"{left.name}/{right.name}", left, right)
         self.numerical_issue_tolerance = numerical_issue_tolerance
 
         right_val = self.right.compute()
@@ -161,14 +161,18 @@ class Div(BinaryOp):
 
 class Exp(BinaryOp):
     def __init__(self, base: Var, exponent: Var):
-        super().__init__("^", base, exponent)
+        super().__init__(f"{base.name}^{exponent.name}", base, exponent)
         
         # Verify that the exponent is a ConstantVar
         if not isinstance(exponent, ConstantVar):
             raise TypeError("Exponent must be a ConstantVar")
         
-        if abs(base.compute()) < 1e-8:
-            warnings.warn("The base is too close to zero. This might be lead to numerical issues")
+        try:
+            if abs(base.compute()) < 1e-8:
+                warnings.warn("The base is too close to zero. This might be lead to numerical issues")
+        except IllegalStateError:
+            # this means that the base is not set yet.
+            pass 
 
         # Store the exponent value for easier access
         self.exponent_value = exponent.compute()

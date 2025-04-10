@@ -18,7 +18,7 @@ class TestAbsValForwardBasic(unittest.TestCase):
         x = ElementaryVar("x", -2.0)
         abs_op = AbsVal(x)
         
-        self.assertEqual(abs_op.name, "|.|")
+        self.assertEqual(abs_op.name, "|x|")
         self.assertIsNone(abs_op.value)
         self.assertIsNone(abs_op.grad)
         self.assertEqual(abs_op.children, [x])

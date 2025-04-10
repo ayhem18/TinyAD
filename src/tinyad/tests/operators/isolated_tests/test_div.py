@@ -19,7 +19,7 @@ class TestDivForwardBasic(unittest.TestCase):
         y = ElementaryVar("y", 3.0)
         div = Div(x, y)
         
-        self.assertEqual(div.name, "/")
+        self.assertEqual(div.name, "x/y")
         self.assertIsNone(div.value)
         self.assertIsNone(div.grad)
         self.assertEqual(div.children, [x, y])

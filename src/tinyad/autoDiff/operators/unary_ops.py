@@ -27,7 +27,7 @@ class UnaryOp(Var):
 
 class Neg(UnaryOp):
     def __init__(self, operand: Var):
-        super().__init__("-", operand)
+        super().__init__(f"-{operand.name}", operand)
 
     def forward(self) -> "Var":
         return Neg(self.operand)
@@ -53,7 +53,7 @@ class Neg(UnaryOp):
 
 class AbsVal(UnaryOp):
     def __init__(self, operand: Var):
-        super().__init__("|.|", operand)
+        super().__init__(f"|{operand.name}|", operand)
 
     def forward(self) -> "Var":
         return AbsVal(self.operand)

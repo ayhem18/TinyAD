@@ -18,7 +18,7 @@ class TestNegForwardBasic(unittest.TestCase):
         x = ElementaryVar("x", 2.0)
         neg = Neg(x)
         
-        self.assertEqual(neg.name, "-")
+        self.assertEqual(neg.name, "-x")
         self.assertIsNone(neg.value)
         self.assertIsNone(neg.grad)
         self.assertEqual(neg.children, [x])

@@ -8,10 +8,10 @@ import re
 from collections import defaultdict, deque
 from typing import Dict, List, Optional, Tuple
 
-from numpy import copy
+from copy import deepcopy
 
 from tinyad.autoDiff.common import NUM
-from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub
+from tinyad.autoDiff.operators.binary_ops import Add, Div, Exp, Mult, Sub
 from tinyad.autoDiff.operators.unary_ops import Neg
 from tinyad.autoDiff.var import ConstantVar, ElementaryVar, Var
 
@@ -215,7 +215,7 @@ def parse_no_operators2(expression: str,
     """
     # the first step is to make sure that the expression includes only variables and numbers
     if re.match(r'^[a-zA-Z0-9_\.]+$', expression) is None:
-        raise ValueError("The expression must include only variables and numbers")
+            raise ValueError("The expression must include only variables and numbers")
     
     # the second step is to parse the expression
     # we need to find the first number in the expression (if any)
@@ -262,11 +262,13 @@ def parse_no_operators2(expression: str,
     return variables, var_position_tracker
 
 
-def extend_expression(expression:str, precomputed: Dict[Tuple[int, int], Var], global_var_name_tracker: Dict[Tuple[int, int], Var]) -> Var:
+def extend_expression(expression:str, 
+                      precomputed: Dict[Tuple[int, int], Var], 
+                      global_var_name_tracker: Dict[Tuple[int, int], Var]) -> Tuple[str, List[Var], Dict[Tuple[int, int], Var]]:
     """
     This function parses a mathematical expression and converts it into a Var object.
     """
-    exp = copy(expression.lower())
+    exp = deepcopy(process_expression(expression).lower())
 
     # the step here is variables with parentheses here. 
     for start, end in global_var_name_tracker.items():
@@ -280,15 +282,13 @@ def extend_expression(expression:str, precomputed: Dict[Tuple[int, int], Var], g
 
     # the expression will be reconstructed by adding the implicit multiplication operators 
     # between the variables 
-
-
-    # we need to add the implicit multiplication operators between the variables 
-    
-    new_expression = expression[:ops_indices[0] + 1]
+        
+    new_expression = exp[:ops_indices[0]]
     new_precomputed = {}
     
     if len(new_expression) > 0:
         variables, _ = parse_no_operators2(new_expression, global_var_name_tracker)
+        new_expression = "*".join([v.name for v in variables])
     else:
         variables = []
 
@@ -297,7 +297,7 @@ def extend_expression(expression:str, precomputed: Dict[Tuple[int, int], Var], g
         current_idx = ops_indices[i]
         next_idx = ops_indices[i + 1] if i + 1 < len(ops_indices) else len(exp) 
 
-        exp_no_ops = expression[current_idx + 1:next_idx]
+        exp_no_ops = exp[current_idx + 1:next_idx]
 
         if (current_idx + 1, next_idx) in precomputed:
             new_precomputed[len(new_expression), len(new_expression) + len(exp_no_ops)] = precomputed[(current_idx + 1, next_idx)]
@@ -306,45 +306,62 @@ def extend_expression(expression:str, precomputed: Dict[Tuple[int, int], Var], g
         else:
             inner_vars, var_position_tracker = parse_no_operators2(exp_no_ops, global_var_name_tracker) 
             inner_expression = "*".join([v.name for v in inner_vars])
-            new_expression += inner_expression
+            
+            new_expression += (exp[current_idx] + inner_expression)
             variables.extend(inner_vars)
 
     return new_expression, variables, new_precomputed
 
 
-def evaluate_expression(extended_expression:str, variables: List[Var]) -> Var:
+def evaluate_expression_inner(extended_expression:str, variables: List[Var]) -> Var:
     """
     This function parses a mathematical expression and converts it into a Var object.
     """
-    ops_indices = [i for i, c in enumerate(extended_expression) if c in DEFAULT_SUPPORTED_OPERATORS]
+    operator_indices_in_expression = [i for i, c in enumerate(extended_expression) if c in DEFAULT_SUPPORTED_OPERATORS]
 
-
+    # the op2indices is a dictionary that maps the operator to the indices of that operator in the `extended_expression` string 
     op2indices = {"+-": [], '*/': [], '^': []}
-
+    
+    # the op2order is a dictionary that maps the operator to the order of that operator in the `operator_indices_in_expression` list 
+    op2order = {"+-": [], '*/': [], '^': []}
+   
     for i, c in enumerate(extended_expression):
-        for operators_string in op2indices:
-            if c in operators_string:
-                op2indices[operators_string].append(i)
+        for op_string in op2order:
+            if c in op_string:
+                op2indices[op_string].append(i)
 
+    for order, idx in enumerate(operator_indices_in_expression):
+        operator = extended_expression[idx]
+        for ops_string in op2order:
+            if operator in ops_string:
+                op2order[ops_string].append(order)
 
-    if ops_indices[0] == 0:
+    if operator_indices_in_expression[0] == 0:
         if extended_expression[0] != '-':
             raise ValueError("if the expression starts with an operator, it must be a '-'")
         else:
             variables[0] = Neg(variables[0]) 
-            ops_indices = ops_indices[1:]
+            operator_indices_in_expression = operator_indices_in_expression[1:]
 
-    if len(ops_indices) != len(variables) - 1:
+    if len(operator_indices_in_expression) != len(variables) - 1:
         raise ValueError("something happened")
 
     # at this point we are ready to create the final variable:
     # the idea is a bit tricky
 
+    exp_propagate = {}
+
     # 1. compute the exponential operator first
-    for _, idx in op2indices["^"]:
-        res_var = variables[idx] ** variables[idx + 1] 
+    for idx in op2order["^"]:
+        res_var = Exp(variables[idx], variables[idx + 1]) 
         variables[idx] = res_var
         variables[idx + 1] = res_var
+        
+        # basically this is a dictionary that makes sure variables that coupled together are updated together
+        exp_propagate[idx] = idx + 1
+        exp_propagate[idx + 1] = idx
+
+
 
     # 2. find blocks of multiplication and division operators   
 
@@ -352,8 +369,8 @@ def evaluate_expression(extended_expression:str, variables: List[Var]) -> Var:
     last_block = []
 
     
-    for i in range(len(ops_indices)):
-        if extended_expression[ops_indices[i]] in ['*', '/']:
+    for i in range(len(operator_indices_in_expression)):
+        if extended_expression[operator_indices_in_expression[i]] in ['*', '/']:
             last_block.append(i)
         else:
             if len(last_block) > 0:
@@ -364,30 +381,41 @@ def evaluate_expression(extended_expression:str, variables: List[Var]) -> Var:
         mult_div_blocks.append(last_block)
 
     # 2. compute the multiplication and division operators next
+
     for block in mult_div_blocks: 
         res_var = variables[block[0]]
 
-        for i in range(1, len(block)):
-            if extended_expression[ops_indices[block[i]]] == '*':
-                res_var = res_var * variables[block[i]]
+        for op_index in block:
+            if extended_expression[operator_indices_in_expression[op_index]] == '*':
+                res_var = Mult(res_var, variables[op_index + 1])
             else:
-                res_var = res_var / variables[block[i]] 
+                res_var = Div(res_var, variables[op_index + 1])
         
-        for i in block:
-            variables[i] = res_var
+        # make sure to set the new variable 
+        for op_index in block:
+            variables[op_index] = res_var
+            if op_index in exp_propagate:
+                variables[exp_propagate[op_index]] = res_var 
 
         variables[block[-1] + 1] = res_var        
+        if block[-1] + 1 in exp_propagate:
+            variables[exp_propagate[block[-1] + 1]] = res_var
+
+    # consider the case where there is no addition or subtraction operators 
+    if len(op2order["+-"]) == 0:
+        return res_var
 
     # 3. compute the addition and subtraction operators next
-    first_index = min(op2indices["+-"])
+    
+    first_index = min(op2order["+-"])
 
-    if extended_expression[first_index] != "+":
+    if extended_expression[operator_indices_in_expression[first_index]] != "+":
         raise ValueError("something happened !!!, at this point + must appear before -")
 
     final_var = variables[first_index]
     
-    for i in op2indices["+-"]:
-        if extended_expression[i] == "+":
+    for i in op2order["+-"]:
+        if extended_expression[operator_indices_in_expression[i]] == "+":
             final_var = Add(final_var, variables[i + 1])
         else:
             final_var = Sub(final_var, variables[i + 1])
@@ -395,6 +423,11 @@ def evaluate_expression(extended_expression:str, variables: List[Var]) -> Var:
     return final_var
 
     
+def evaluate_expression(expression: str, precomputed: Dict[Tuple[int, int], Var], global_var_name_tracker: Dict[Tuple[int, int], Var]) -> Var:
+    extended_expression, variables, new_precomputed = extend_expression(expression, precomputed, global_var_name_tracker)
+    return evaluate_expression_inner(extended_expression, variables)
+
+
 
 
 # def parse_expression_no_parentheses(expression: str, var_name_tracker: Dict[str, Var], var_position_tracker: Dict[Tuple[int, int], Var]) -> Var:
