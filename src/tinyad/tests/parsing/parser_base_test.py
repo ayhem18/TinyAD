@@ -2,6 +2,10 @@ import random
 from typing import List, Optional, Tuple
 import unittest
 
+from tinyad.autoDiff.common import Var
+from tinyad.autoDiff.operators.binary_ops import Add, Mult, Sub, Exp, Div
+from tinyad.autoDiff.var import ConstantVar, ElementaryVar
+
 
 class ParserBaseTest(unittest.TestCase):
 
@@ -9,7 +13,7 @@ class ParserBaseTest(unittest.TestCase):
         """Generate a random variable name."""
         # Generate a random letter (a-z, A-Z)
         
-        letter = random.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        letter = random.choice("abcdefghijklmnopqrstuvwxyz")
         var_name = letter
         
         # Optionally add an underscore and a number
@@ -142,4 +146,30 @@ class ParserBaseTest(unittest.TestCase):
             explicit_expression[i] = ' '
 
         return ''.join(explicit_expression).replace(' ', '')
+        
+
+    def generate_simple_precomputed_expression(self) -> Var:
+        """
+        Generate a precomputed expression with implicit operators.
+        """
+        
+        vn1 = self.generate_random_variable_name(max_underscore_num=10).lower()
+        vn2 = self.generate_random_variable_name(max_underscore_num=10).lower()
+        
+        operators = ['+', '-', '*', '/', '^']
+        
+        op = random.choice(operators)
+
+        if op == '*':
+            return Mult(ElementaryVar(vn1, None), ElementaryVar(vn2, None))
+        elif op == '/':
+            return Div(ElementaryVar(vn1, None), ElementaryVar(vn2, None))
+        elif op == '^':
+            x = round(random.uniform(1, 100),2)
+            return Exp(ElementaryVar(vn1, None), ConstantVar(str(x), x))
+        elif op == '+':
+            return Add(ElementaryVar(vn1, None), ElementaryVar(vn2, None))
+        else:
+            return Sub(ElementaryVar(vn1, None), ElementaryVar(vn2, None))
+
         

@@ -123,13 +123,19 @@ class Div(BinaryOp):
         super().__init__(f"{left.name}/{right.name}", left, right)
         self.numerical_issue_tolerance = numerical_issue_tolerance
 
-        right_val = self.right.compute()
+        try:
+            right_val = self.right.compute()
 
-        if right_val == 0:
-            raise ValueError("Division by zero")
+            if right_val == 0:
+                raise ValueError("Division by zero")
 
-        if abs(right_val) < numerical_issue_tolerance:
-            raise ValueError("Division by a number too close to zero")
+            if abs(right_val) < numerical_issue_tolerance:
+                raise ValueError("Division by a number too close to zero")
+
+        except IllegalStateError:
+            # this means that the right variable is not set yet
+            pass
+
 
 
     def forward(self) -> "Var":

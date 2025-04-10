@@ -1,3 +1,4 @@
+from copy import deepcopy
 import random
 from typing import Dict
 import unittest
@@ -233,7 +234,7 @@ class TestParserLevel2Expressions(ParserBaseTest):
     def test_extend_expression_only_vars(self):
         """Test extend_expression with no precomputed variables."""
         
-        for _ in range(5000): 
+        for _ in range(20000): 
             # 1. Generate a set of random variables
             num_vars = random.randint(3, 8)
             variables = [self.generate_random_variable_name().lower() for _ in range(num_vars)]
@@ -259,38 +260,89 @@ class TestParserLevel2Expressions(ParserBaseTest):
             self.assertEqual(sorted([v.name for v in variables_list]), sorted(variables))
 
 
-    # def test_extend_expression_with_precomputed(self):
-    #     """Test extend_expression with precomputed variables."""
-    #     # Create some precomputed variables
-    #     x = ElementaryVar("x", 2.0)
-    #     y = ElementaryVar("y", 3.0)
-        
-    #     # Create a simple expression with implicit multiplication: "xy+5"
-    #     expression = "xy+5"
-        
-    #     # Set up precomputed dict - assume xy has been precomputed
-    #     precomputed = {(0, 2): Mult(x, y)}
-    #     global_var_name_tracker = {}
-        
-    #     # Call extend_expression
-    #     new_expression, variables_list, new_precomputed = extend_expression(
-    #         expression, precomputed, global_var_name_tracker
-    #     )
-        
-    #     # The new expression should be "&&+5" (xy replaced with && placeholders)
-    #     # and new_precomputed should contain the mapping for this
-        
-    #     # Check that the precomputed part is preserved
-    #     self.assertEqual(len(new_precomputed), 1, "Should have one precomputed variable")
-        
-    #     # The exact format may vary based on implementation, but variables_list should include:
-    #     # - The precomputed Mult(x, y)
-    #     # - The constant 5
-    #     self.assertEqual(len(variables_list), 2, "Should have two variables in the output")
-        
-    #     # Check that one of the variables is the precomputed Mult
-    #     self.assertTrue(any(isinstance(v, Mult) for v in variables_list), 
-    #                    "Output should include the precomputed Mult variable")
+    def test_extend_expression_precomputed_v1(self):
+        for _ in range(20000):
+            n_precomputed = random.randint(2, 10)
+            precomputed = [self.generate_simple_precomputed_expression() for _ in range(n_precomputed)] 
+
+            final_explicit_expression = "(" + precomputed[0].name + ")"
+            final_implicit_expression = deepcopy(final_explicit_expression)
+
+            # make sure to save the indices of the precomputed variables
+            precomputed_indices = {(0, len(final_implicit_expression) - 1): precomputed[0]}
+
+            other_var_names = []
+
+            for i in range(1, n_precomputed):
+                op = random.choice(['+', '-', '*', '/'])
+                final_implicit_expression += op 
+                final_explicit_expression += op 
+
+                vars = [self.generate_random_variable_name(max_underscore_num=10) for _ in range(random.randint(2, 10))]
+                other_var_names.append(vars)
+                expression, _ = self.generate_random_expression_with_operators(vars)
+
+                # create an implicit expression
+                implicit_expression = self.generate_inexplicit_expression_from_explicit(expression, num_removal=random.randint(2, 5))
+
+                final_implicit_expression += implicit_expression
+                final_explicit_expression += expression
+
+                op = random.choice(['+', '-', '*', '/'])
+                final_implicit_expression += op 
+                final_explicit_expression += op 
+
+                i1 = len(final_implicit_expression)
+
+                final_implicit_expression += ("(" + precomputed[i].name + ")")    
+                final_explicit_expression += ("(" + precomputed[i].name + ")")
+
+                i2 = len(final_implicit_expression)-1
+
+                precomputed_indices[(i1, i2)] = precomputed[i]
+
+
+            for (i1, i2), v in precomputed_indices.items():
+                self.assertEqual(final_implicit_expression[i2], ")")
+                self.assertEqual(final_implicit_expression[i1], "(")
+                self.assertEqual(final_implicit_expression[i1 + 1:i2], v.name)
+
+
+            # now call extend_expression
+            new_expression, variables_list, new_precomputed = extend_expression(
+                final_implicit_expression, precomputed_indices, {}
+            )
+
+            # the new expression must be the same as the explicit expression
+            self.assertEqual(new_expression, final_explicit_expression)
+
+            self.assertEqual(len(variables_list), sum([len(inner_vars) for inner_vars in other_var_names]) + n_precomputed)
+
+            # it is important to check that the variables list is correct
+
+            precomputed_indices = [0]
+            other_vars_indices = []
+
+            for _, v in zip(precomputed, other_var_names):
+                other_vars_indices.append([precomputed_indices[-1] + i for i in range(1, len(v) + 1)])
+                precomputed_indices.append(precomputed_indices[-1] + len(v) + 1)
+
+            for order, i in enumerate(precomputed_indices):
+                self.assertIs(variables_list[i], precomputed[order])
+
+            for order, i in enumerate(other_vars_indices):
+                actual = [variables_list[j].name.lower() for j in i]
+                expected = [var_name.lower() for var_name in other_var_names[order]]
+                expected2 = ["(" + var_name.lower() + ")" for var_name in other_var_names[order]]
+                self.assertTrue(actual == expected or actual == expected2)
+
+            # it is important to make sure that the new precomputed variables are also correct
+            for order, ((i1, i2), v) in enumerate(sorted(new_precomputed.items(), key=lambda x: x[0][0])):
+                self.assertEqual(new_expression[i2], ")")
+                self.assertEqual(new_expression[i1], "(")
+                self.assertEqual(new_expression[i1:i2+1], v.name)
+                
+                self.assertEqual(v, precomputed[order])
 
 
 if __name__ == "__main__":

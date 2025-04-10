@@ -274,23 +274,40 @@ def extend_expression(expression:str,
     # exp = deepcopy(process_expression(expression).lower())
     exp = deepcopy(expression)
 
-    #TODO: add the code to verify whether the precomputed indices are as expected.
-
+    exp = list(exp)
     # the step here is variables with parentheses here. 
-    for start, end in global_var_name_tracker.items():
-        exp[start:end] = "&" * (end - start) 
+    for (start, end), _ in precomputed.items():
+        for i in range(start, end + 1):
+            exp[i] = "&"
 
+    exp = "".join(exp)
     # now we are guaranteed that the expression is a valid expression without parentheses 
     # we can now parse the expression 
 
     # determine all operators 
     ops_indices = [i for i, c in enumerate(exp) if c in DEFAULT_SUPPORTED_OPERATORS]
 
+
+    for (i1, i2), _ in precomputed.items():
+        if i1 != 0 and i1 - 1 not in ops_indices:
+            raise ValueError("the precomputed indices must be between operators")
+        
+        if i2 != len(exp) - 1 and i2 + 1 not in ops_indices:
+            raise ValueError("the precomputed indices must be between operators")
+
+
     if len(ops_indices) == 0:
-        # this means that the expression does not contain any operators
-        # extract the variables, join them with the * operator and return the result
-        variables, _ = parse_no_operators2(exp, global_var_name_tracker)
-        return "*".join([v.name for v in variables]), variables, {}
+        # this means that the expression does not contain any operators        
+        # there are 2 scenarios here: 
+        # either this part is already precomputed or not
+        if (0, len(exp)) in precomputed:
+            var = precomputed[(0, len(exp))]
+            var.add_parentheses()
+            return var.name, [var], {(0, len(exp)): var}
+        else:
+            # extract the variables, join them with the * operator and return the result
+            variables, _ = parse_no_operators2(exp, global_var_name_tracker)
+            return "*".join([v.name for v in variables]), variables, {}
 
 
     # the expression will be reconstructed by adding the implicit multiplication operators 
@@ -299,9 +316,20 @@ def extend_expression(expression:str,
     new_expression = exp[:ops_indices[0]]
     new_precomputed = {}
     
+    variables = None
+
     if len(new_expression) > 0:
-        variables, _ = parse_no_operators2(new_expression, global_var_name_tracker)
-        new_expression = "*".join([v.name for v in variables])
+        # make sure to consider the case of precomputed variables
+        possible_precomputed_pair = (0, len(new_expression) - 1)
+        if possible_precomputed_pair in precomputed:
+            var = precomputed[possible_precomputed_pair]
+            new_precomputed[possible_precomputed_pair] = var
+            var.add_parentheses()
+            new_expression = var.name
+            variables = [var] 
+        else:
+            variables, _ = parse_no_operators2(new_expression, global_var_name_tracker)
+            new_expression = "*".join([v.name for v in variables])
     else:
         variables = []
 
@@ -312,12 +340,21 @@ def extend_expression(expression:str,
 
         exp_no_ops = exp[current_idx + 1:next_idx]
 
-        if (current_idx + 1, next_idx) in precomputed:
-            new_precomputed[len(new_expression), len(new_expression) + len(exp_no_ops)] = precomputed[(current_idx + 1, next_idx)]
-            new_expression += "&" * len(exp_no_ops)
-            variables.append(precomputed[(current_idx + 1, next_idx)])
+        possible_precomputed_pair = (current_idx + 1, next_idx - 1)
+
+        if possible_precomputed_pair in precomputed:
+            var = precomputed[possible_precomputed_pair]
+            var.add_parentheses()
+            
+            new_expression += exp[current_idx]
+            new_precomputed_pair = (len(new_expression), len(new_expression) + len(exp_no_ops) - 1)
+            new_precomputed[new_precomputed_pair] = var
+
+            variables.append(var)
+            new_expression += var.name
+            
         else:
-            inner_vars, var_position_tracker = parse_no_operators2(exp_no_ops, global_var_name_tracker) 
+            inner_vars, _ = parse_no_operators2(exp_no_ops, global_var_name_tracker) 
             inner_expression = "*".join([v.name for v in inner_vars])
             
             new_expression += (exp[current_idx] + inner_expression)
