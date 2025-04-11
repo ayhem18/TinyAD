@@ -27,15 +27,7 @@ class TestExpForwardBasic(unittest.TestCase):
         self.assertEqual(exp.right, n)
         self.assertEqual(exp.exponent_value, 3.0)
     
-    def test_constant_exponent_required(self):
-        """Test that exponent must be a ConstantVar."""
-        x = ElementaryVar("x", 2.0)
-        y = ElementaryVar("y", 3.0)
         
-        # Should raise TypeError when exponent is not a ConstantVar
-        with self.assertRaises(TypeError):
-            Exp(x, y)
-    
     def test_compute(self):
         """Test the compute method with various random values."""
         # Test with 20 random pairs of values
@@ -196,7 +188,13 @@ class TestExpBackwardBasic(unittest.TestCase):
             while abs(n_val) < 1e-6:
                 # keep generating a new exponent until it's not too close to 0
                 n_val = random.uniform(-100, 100)   
-            
+
+            if n_val <= 0:
+                with self.assertRaises(ValueError):
+                    exp = Exp(x, ConstantVar("n", n_val))
+                    exp.compute()
+                continue
+    
             # 0^anything = 0
             exp = Exp(x, ConstantVar("n", n_val))
             self.assertEqual(exp.compute(), 0.0)

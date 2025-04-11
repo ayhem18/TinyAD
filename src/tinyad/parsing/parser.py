@@ -287,12 +287,13 @@ def extend_expression(expression:str,
     # determine all operators 
     ops_indices = [i for i, c in enumerate(exp) if c in DEFAULT_SUPPORTED_OPERATORS]
 
+    ops_indices_set = set(ops_indices)
 
     for (i1, i2), _ in precomputed.items():
-        if i1 != 0 and i1 - 1 not in ops_indices:
+        if i1 != 0 and i1 - 1 not in ops_indices_set:
             raise ValueError("the precomputed indices must be between operators")
         
-        if i2 != len(exp) - 1 and i2 + 1 not in ops_indices:
+        if i2 != len(exp) - 1 and i2 + 1 not in ops_indices_set:
             raise ValueError("the precomputed indices must be between operators")
 
 
@@ -363,10 +364,24 @@ def extend_expression(expression:str,
     return new_expression, variables, new_precomputed
 
 
-def evaluate_expression_inner(extended_expression:str, variables: List[Var]) -> Var:
+def evaluate_expression_inner(extended_expression:str, 
+                                variables: List[Var], 
+                                precomputed: Dict[Tuple[int, int], Var]) -> Var:
     """
     This function parses a mathematical expression and converts it into a Var object.
     """
+
+    # a variable for debugging purposes
+    org_expression = deepcopy(extended_expression)
+
+    exp = list(extended_expression)
+    # the step here is variables with parentheses here. 
+    for (start, end), _ in precomputed.items():
+        for i in range(start, end + 1):
+            exp[i] = "&"
+
+    extended_expression = "".join(exp)
+
     operator_indices_in_expression = [i for i, c in enumerate(extended_expression) if c in DEFAULT_SUPPORTED_OPERATORS]
 
     # the op2indices is a dictionary that maps the operator to the indices of that operator in the `extended_expression` string 
@@ -459,9 +474,6 @@ def evaluate_expression_inner(extended_expression:str, variables: List[Var]) -> 
     
     first_index = min(op2order["+-"])
 
-    if extended_expression[operator_indices_in_expression[first_index]] != "+":
-        raise ValueError("something happened !!!, at this point + must appear before -")
-
     final_var = variables[first_index]
     
     for i in op2order["+-"]:
@@ -475,7 +487,7 @@ def evaluate_expression_inner(extended_expression:str, variables: List[Var]) -> 
     
 def evaluate_expression(expression: str, precomputed: Dict[Tuple[int, int], Var], global_var_name_tracker: Dict[Tuple[int, int], Var]) -> Var:
     extended_expression, variables, new_precomputed = extend_expression(expression, precomputed, global_var_name_tracker)
-    return evaluate_expression_inner(extended_expression, variables)
+    return evaluate_expression_inner(extended_expression, variables, new_precomputed)
 
 
 

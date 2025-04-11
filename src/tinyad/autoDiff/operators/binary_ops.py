@@ -1,6 +1,8 @@
 from abc import abstractmethod
-from typing import Optional
+from typing import Optional, Tuple, Union
 import warnings
+
+import numpy as np
 
 from ..common import NUM, IllegalStateError, Var
 from ..var import ConstantVar
@@ -119,7 +121,22 @@ class Mult(BinaryOp):
 
 
 class Div(BinaryOp):
-    def __init__(self, left: Var, right: Var, numerical_issue_tolerance: float = 1e-8):
+    def __value_checks(self, left: Var, right: Var) -> Tuple[NUM, NUM]:
+        if isinstance(right, Var):
+            right = right.compute()
+        
+        if right == 0:
+            raise ValueError("Division by zero")
+
+        if abs(right) < self.numerical_issue_tolerance:
+            raise ValueError("Division by a number too close to zero")
+
+        if isinstance(left, Var):
+            left = left.compute()
+
+        return left, right
+
+    def __init__(self, left: Var, right: Var, numerical_issue_tolerance: float = 1e-10):
         super().__init__(f"{left.name}/{right.name}", left, right)
         self.numerical_issue_tolerance = numerical_issue_tolerance
 
@@ -150,29 +167,47 @@ class Div(BinaryOp):
         # dz/dvar1 = 1/var2, dz/dvar2 = -var1/var2²
         self.grad = value
         
-        right_val = self.right.compute()
+        left_val, right_val = self.__value_checks(self.left, self.right)
         
         # propagate the gradient to the children
         self.left.backward(value / right_val)
-        self.right.backward(-value * self.left.compute() / (right_val ** 2))
+        self.right.backward(-value * left_val / (right_val ** 2))
 
 
     def compute(self) -> NUM:
         if self.value is not None:
             return self.value
         
-        self.value = self.left.compute() / self.right.compute()
+        left_val, right_val = self.__value_checks(self.left, self.right)
+        self.value = left_val / right_val
         return self.value
 
 
 class Exp(BinaryOp):
+
+    def __value_checks(self, base: Union[Var, NUM], exponent: Union[Var, NUM]) -> Tuple[NUM, NUM]:
+        # calling these methods triggers the computation of the value:
+        # which means, it assumes the value is already set !!!
+        if isinstance(base, Var):
+            base = base.compute()
+
+        if isinstance(exponent, Var):
+            exponent = exponent.compute()
+        
+        # if exponent == 0:
+        #     raise ValueError("The the exponent must be set to a value different from 0")
+
+        if base == 0 and exponent < 0:
+            raise ValueError("The base must be set to a value different from 0 when the exponent is less or equal to 0")
+
+        return base, exponent
+
+
+
     def __init__(self, base: Var, exponent: Var):
         super().__init__(f"{base.name}^{exponent.name}", base, exponent)
-        
-        # Verify that the exponent is a ConstantVar
-        if not isinstance(exponent, ConstantVar):
-            raise TypeError("Exponent must be a ConstantVar")
-        
+
+
         try:
             if abs(base.compute()) < 1e-8:
                 warnings.warn("The base is too close to zero. This might be lead to numerical issues")
@@ -180,11 +215,15 @@ class Exp(BinaryOp):
             # this means that the base is not set yet.
             pass 
 
-        # Store the exponent value for easier access
-        self.exponent_value = exponent.compute()
+        try:
+            self.exponent_value = exponent.compute()
 
-        if self.exponent_value == 0:
-            raise ValueError("The the exponent must be set to a value different from 0")
+            if self.exponent_value == 0:
+                raise ValueError("The the exponent must be set to a value different from 0")
+
+        except IllegalStateError:
+            # this means that the exponent is not set yet.
+            pass
 
 
     def forward(self) -> "Var":
@@ -198,33 +237,35 @@ class Exp(BinaryOp):
         # dy/dx = n * x^(n-1)
         self.grad = value
         
-        base_value = self.left.compute()
-        exponent = self.exponent_value
+        base_value, exponent = self.__value_checks(self.left, self.right)
         
         # Calculate gradient for the base
         # Guard against potential numerical issues
-        if base_value == 0 and exponent < 1:
-            gradient = 0  # Handle 0^n cases carefully
+        if base_value == 0:
+            gradient_base = 0  # Handle 0^n cases carefully
         else:
-            gradient = exponent * (base_value ** (exponent - 1))
+            gradient_base = exponent * (base_value ** (exponent - 1))
         
+        # Calculate gradient for the exponent
+
+        if base_value == 0:
+            gradient_exponent = 0
+        else:
+            gradient_exponent = np.log(base_value).item() * (base_value ** (exponent))
+
         # Propagate gradient to the base (left operand)
-        self.left.backward(value * gradient)
+        self.left.backward(value * gradient_base)
         
         # No gradient propagation to the exponent (constant)
-        self.right.backward(0)
+        self.right.backward(value * gradient_exponent)
 
     def compute(self) -> NUM:
         if self.value is not None:
             return self.value
-        
-        base = self.left.compute()
-        exponent = self.exponent_value
-        
-        # # Handle special cases or potential errors
-        # if base < 0 and not (exponent).is_integer():
-        #     raise ValueError("Cannot raise negative number to fractional power")
-        
+
+        # make sure the values satisfy the constraints
+        base, exponent = self.__value_checks(self.left, self.right)
+
         if base == 0:
             return 0
 
